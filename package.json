@@ -1,0 +1,64 @@
+{
+  "name": "digitalkingz",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "devsafe": "rm -rf .next && cross-env NODE_OPTIONS=--no-deprecation next dev",
+    "build": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap && cross-env NODE_OPTIONS=--no-deprecation next build",
+    "start": "cross-env NODE_OPTIONS=--no-deprecation next start",
+    "lint": "cross-env NODE_OPTIONS=--no-deprecation next lint",
+    "typecheck": "tsc --noEmit",
+    "payload": "cross-env NODE_OPTIONS=--no-deprecation payload",
+    "generate:types": "cross-env NODE_OPTIONS=--no-deprecation payload generate:types",
+    "generate:importmap": "cross-env NODE_OPTIONS=--no-deprecation payload generate:importmap",
+    "seed": "cross-env NODE_OPTIONS=--no-deprecation tsx src/seed/run.ts"
+  },
+  "dependencies": {
+    "@payloadcms/db-postgres": "3.87.1",
+    "@payloadcms/next": "3.87.1",
+    "@payloadcms/richtext-lexical": "3.87.1",
+    "@payloadcms/ui": "3.87.1",
+    "clsx": "^2.1.1",
+    "cross-env": "^10.1.0",
+    "geist": "^1.7.2",
+    "graphql": "^16.11.0",
+    "lucide-react": "^0.554.0",
+    "next": "15.4.11",
+    "payload": "3.87.1",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "resend": "^6.1.2",
+    "server-only": "^0.0.1",
+    "sharp": "0.34.2",
+    "tailwind-merge": "^3.3.1",
+    "zod": "^4.1.11"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/node": "^22.18.1",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "dotenv": "^17.4.2",
+    "eslint": "^9.35.0",
+    "eslint-config-next": "15.4.11",
+    "playwright": "^1.62.1",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.20.5",
+    "typescript": "5.7.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp",
+      "esbuild",
+      "@tailwindcss/oxide",
+      "unrs-resolver"
+    ]
+  }
+}
