@@ -16,7 +16,7 @@ const UPDATED = '7 August 2026'
 
 export default async function TermsPage() {
   const settings = await getSiteSettings()
-  const email = settings.email ?? 'hello@digitalkingz.com'
+  const email = settings.email ?? 'solutions@digitalkingz.com'
   const legalName = settings.legalName ?? 'Digital Kingz Development'
 
   return (

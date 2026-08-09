@@ -100,7 +100,7 @@ async function seed() {
   console.log('\n  Seeding digitalkingz.com\n' + '  ' + '-'.repeat(52))
 
   // --- Admin user ---------------------------------------------------------
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@digitalkingz.com'
+  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'solutions@digitalkingz.com'
   const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe-DigitalKingz-2026'
   const existingUsers = await payload.find({
     collection: 'users',
@@ -266,7 +266,7 @@ async function seed() {
       tagline: 'We Build Digital Systems That Grow Businesses.',
       description:
         'Digital Kingz is a digital development and growth agency serving businesses across Montreal, Quebec and Canada. We build connected systems across web design, development, SEO, paid media, conversion optimization, CRM and AI automation, and operate the infrastructure that turns attention into qualified pipeline and pipeline into revenue.',
-      email: 'hello@digitalkingz.com',
+      email: 'solutions@digitalkingz.com',
       address: {
         locality: 'Montreal',
         region: 'Quebec',

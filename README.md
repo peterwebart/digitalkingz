@@ -26,28 +26,33 @@ Next.js 15 + Payload CMS 3 + PostgreSQL. Deployed via GitHub → Coolify → Het
 
 ## Quick start
 
+Requires Docker Desktop running.
+
 ```bash
 pnpm install
-cp .env.example .env        # fill in DATABASE_URI and PAYLOAD_SECRET
-pnpm seed                   # creates admin user + loads all content
-pnpm dev                    # http://localhost:3000, admin at /admin
+pnpm setup     # creates .env, starts Postgres in Docker, seeds all content
+pnpm dev       # http://localhost:3000, admin at /admin
 ```
 
-Default seed admin: `admin@digitalkingz.com` / `ChangeMe-DigitalKingz-2026`
-Override with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`. **Change the password on first login.**
+Seed admin: `solutions@digitalkingz.com` / `ChangeMe-DigitalKingz-2026`
+Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. **Change it on first login.**
+
+Full Windows walkthrough, the git → Coolify loop and troubleshooting: **`LOCAL-DEV.md`**.
 
 ### Scripts
 
 | Command | Purpose |
 |---|---|
-| `pnpm dev` | Dev server |
-| `pnpm build` | Import map + production build (must pass before any commit) |
-| `pnpm lint` | ESLint, zero-warning policy |
-| `pnpm typecheck` | `tsc --noEmit` |
+| `pnpm setup` | One-command local bootstrap. Safe to re-run. |
+| `pnpm dev` | Dev server (runs the env preflight first) |
+| `pnpm build` | Import map + production build. **Must pass before any push.** |
+| `pnpm check` | Typecheck + lint + content validation |
+| `pnpm db:up` / `db:down` / `db:reset` / `db:logs` | Local Postgres container |
 | `pnpm seed` | Idempotent content seed — safe to re-run |
+| `pnpm content:check` | Content integrity: cross-references, SEO field limits, word counts |
 | `pnpm generate:types` | Regenerate `src/payload-types.ts` after schema changes |
 | `pnpm generate:importmap` | Regenerate the admin import map after adding admin components |
-| `pnpm tsx src/seed/validate.ts` | Content integrity check (cross-references, SEO field limits, word counts) |
+| `pnpm devsafe` | Clear the `.next` cache and start dev |
 
 ---
 

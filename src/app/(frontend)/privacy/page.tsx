@@ -16,7 +16,7 @@ const UPDATED = '7 August 2026'
 
 export default async function PrivacyPage() {
   const settings = await getSiteSettings()
-  const email = settings.email ?? 'hello@digitalkingz.com'
+  const email = settings.email ?? 'solutions@digitalkingz.com'
 
   return (
     <LegalPage

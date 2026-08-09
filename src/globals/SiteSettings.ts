@@ -49,7 +49,7 @@ export const SiteSettings: GlobalConfig = {
         {
           label: 'Contact',
           fields: [
-            { name: 'email', type: 'email', required: true, defaultValue: 'hello@digitalkingz.com' },
+            { name: 'email', type: 'email', required: true, defaultValue: 'solutions@digitalkingz.com' },
             { name: 'phone', type: 'text' },
             {
               name: 'bookingUrl',
