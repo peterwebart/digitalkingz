@@ -114,7 +114,14 @@ pnpm seed
 This creates the admin user and loads all 12 services, 8 industries, 8 articles, 5 categories and
 site settings. It is idempotent — safe to re-run.
 
-Log in at `https://digitalkingz.com/admin` and **change the admin password immediately.**
+Set `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in Coolify first. Both must have a value; a
+variable set to an empty string counts as unset and the seed will stop and tell you.
+
+**Use a unique production password.** The value in `.env.example` is published in the repo, so
+the seed refuses to use it when `NODE_ENV=production`.
+
+Log in at `https://digitalkingz.com/admin` and **change the password immediately after first
+login.** Re-running the seed never modifies an existing account's password.
 
 ---
 

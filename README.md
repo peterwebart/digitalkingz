@@ -34,8 +34,9 @@ pnpm setup     # creates .env, starts Postgres in Docker, seeds all content
 pnpm dev       # http://localhost:3000, admin at /admin
 ```
 
-Seed admin: `solutions@digitalkingz.com` / `ChangeMe-DigitalKingz-2026`
-Override with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`. **Change it on first login.**
+Seed admin credentials come from `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` in `.env`.
+`pnpm setup` writes both; it never prints the password, so read it from the file.
+**Change it on first login.**
 
 Full Windows walkthrough, the git → Coolify loop and troubleshooting: **`LOCAL-DEV.md`**.
 

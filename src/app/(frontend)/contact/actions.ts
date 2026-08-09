@@ -3,6 +3,7 @@
 import { headers } from 'next/headers'
 import { Resend } from 'resend'
 import { scoreLead } from '@/collections/Leads'
+import { env, envOr } from '@/lib/env'
 import {
   BUDGET_CHOICES,
   SERVICE_CHOICES,
@@ -213,8 +214,8 @@ export async function submitLead(
 
   // 2. Notify by email.
   let notificationSent = false
-  const resendKey = process.env.RESEND_API_KEY
-  const to = (process.env.LEAD_EMAIL_TO ?? '')
+  const resendKey = env('RESEND_API_KEY')
+  const to = envOr('LEAD_EMAIL_TO', '')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean)
@@ -223,7 +224,7 @@ export async function submitLead(
     try {
       const resend = new Resend(resendKey)
       const result = await resend.emails.send({
-        from: process.env.LEAD_EMAIL_FROM ?? 'Digital Kingz <onboarding@resend.dev>',
+        from: envOr('LEAD_EMAIL_FROM', 'Digital Kingz <onboarding@resend.dev>'),
         to,
         replyTo: data.email,
         subject: `New enquiry (${score}/100) - ${data.company}`,
@@ -244,7 +245,7 @@ export async function submitLead(
 
   // 3. Forward to the CRM / automation platform.
   let webhookDelivered = false
-  const webhookUrl = process.env.CRM_WEBHOOK_URL
+  const webhookUrl = env('CRM_WEBHOOK_URL')
 
   if (webhookUrl) {
     try {
@@ -252,8 +253,8 @@ export async function submitLead(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(process.env.CRM_WEBHOOK_SECRET
-            ? { 'X-Webhook-Secret': process.env.CRM_WEBHOOK_SECRET }
+          ...(env('CRM_WEBHOOK_SECRET')
+            ? { 'X-Webhook-Secret': env('CRM_WEBHOOK_SECRET') as string }
             : {}),
         },
         body: JSON.stringify({

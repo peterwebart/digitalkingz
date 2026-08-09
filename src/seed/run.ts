@@ -14,11 +14,33 @@ import { getPayload } from 'payload'
 import type { Payload } from 'payload'
 import config from '@payload-config'
 
+import { env } from '../lib/env'
 import { articles, authors, categories, industries, services } from './content'
 import { autolink, blocksToLexical } from '../lib/lexical'
 import type { ServiceSeed } from './types'
 
 const log = (msg: string) => console.log(`  ${msg}`)
+
+/** Minimum length we enforce on the seeded admin account. */
+const MIN_PASSWORD_LENGTH = 12
+
+/** The placeholder published in .env.example, and therefore not a secret. */
+const PUBLIC_EXAMPLE_PASSWORD = 'ChangeMe-DigitalKingz-2026'
+
+/**
+ * Aborts with a readable box rather than a stack trace. Never echoes a
+ * credential value, only the name of the variable that holds it.
+ */
+function fail(title: string, body: string[]): never {
+  console.error('')
+  console.error(`\x1b[31m\x1b[1m  ${'-'.repeat(66)}\x1b[0m`)
+  console.error(`\x1b[31m\x1b[1m  ${title}\x1b[0m`)
+  console.error(`\x1b[31m\x1b[1m  ${'-'.repeat(66)}\x1b[0m`)
+  console.error('')
+  body.forEach((l) => console.error(`  ${l}`))
+  console.error('')
+  process.exit(1)
+}
 
 /** Upserts by slug and returns the resulting document id. */
 async function upsert<T extends Record<string, unknown>>(
@@ -100,23 +122,72 @@ async function seed() {
   console.log('\n  Seeding digitalkingz.com\n' + '  ' + '-'.repeat(52))
 
   // --- Admin user ---------------------------------------------------------
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'solutions@digitalkingz.com'
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'ChangeMe-DigitalKingz-2026'
-  const existingUsers = await payload.find({
+  // Credentials come from the environment, never from source. `env()` treats a
+  // blank value as absent, so `SEED_ADMIN_PASSWORD=` in a .env file is caught
+  // here with a useful message instead of reaching Payload as an empty string.
+  const adminEmail = env('SEED_ADMIN_EMAIL')
+  const adminPassword = env('SEED_ADMIN_PASSWORD')
+
+  if (!adminEmail || !adminPassword) {
+    const missing = [
+      !adminEmail ? 'SEED_ADMIN_EMAIL' : null,
+      !adminPassword ? 'SEED_ADMIN_PASSWORD' : null,
+    ].filter(Boolean)
+
+    fail(`Cannot create the admin user: ${missing.join(' and ')} ${missing.length > 1 ? 'are' : 'is'} not set`, [
+      'Both must be present and non-empty in your .env file.',
+      '',
+      'Add or complete these lines:',
+      '',
+      '  SEED_ADMIN_EMAIL=solutions@digitalkingz.com',
+      '  SEED_ADMIN_PASSWORD=<a password of 12 or more characters>',
+      '',
+      'A key with no value (SEED_ADMIN_PASSWORD=) counts as unset.',
+      '',
+      'Re-running `pnpm setup` will regenerate a complete .env for you.',
+    ])
+  }
+
+  if (adminPassword.length < MIN_PASSWORD_LENGTH) {
+    fail('Admin password is too short', [
+      `SEED_ADMIN_PASSWORD must be at least ${MIN_PASSWORD_LENGTH} characters.`,
+      `The value currently set is ${adminPassword.length}.`,
+    ])
+  }
+
+  // The value shipped in .env.example is public. It is fine for a throwaway
+  // local database and unacceptable on a live one.
+  if (process.env.NODE_ENV === 'production' && adminPassword === PUBLIC_EXAMPLE_PASSWORD) {
+    fail('Refusing to seed a production database with the example password', [
+      'SEED_ADMIN_PASSWORD still holds the value published in .env.example,',
+      'which means it is public knowledge.',
+      '',
+      'Set a unique password in your production environment variables and',
+      'run the seed again.',
+    ])
+  }
+
+  // Idempotency is keyed on the email, so re-running never creates a duplicate
+  // and never touches the password of an account that already exists.
+  const existingAdmin = await payload.find({
     collection: 'users',
+    where: { email: { equals: adminEmail } },
     limit: 1,
     overrideAccess: true,
   })
-  if (existingUsers.totalDocs === 0) {
+
+  if (existingAdmin.totalDocs > 0) {
+    log(`admin user already exists: ${adminEmail}`)
+    log('  password left unchanged')
+  } else {
     await payload.create({
       collection: 'users',
       data: { name: 'Digital Kingz Admin', email: adminEmail, password: adminPassword },
       overrideAccess: true,
     })
     log(`admin user created: ${adminEmail}`)
-    log('  change this password immediately after first login')
-  } else {
-    log('admin user already exists, skipped')
+    log('  password is the SEED_ADMIN_PASSWORD value in your .env file')
+    log('  change it after your first login')
   }
 
   // --- Taxonomy -----------------------------------------------------------

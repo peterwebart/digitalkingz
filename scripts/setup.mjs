@@ -62,6 +62,25 @@ if (existsSync(envPath)) {
   warn('.env is git-ignored — it will never be committed or pushed')
 }
 
+// The seed needs a usable admin password. A key present but empty
+// (SEED_ADMIN_PASSWORD=) reads as an empty string, not as undefined, so check
+// the value rather than the key.
+{
+  const envText = readFileSync(envPath, 'utf8')
+  const read = (key) => {
+    const line = envText.split(/\r?\n/).find((l) => l.startsWith(`${key}=`))
+    return line ? line.slice(key.length + 1).trim() : ''
+  }
+  const missing = ['SEED_ADMIN_EMAIL', 'SEED_ADMIN_PASSWORD'].filter((k) => read(k).length === 0)
+  if (missing.length > 0) {
+    die(
+      `.env is missing a value for ${missing.join(' and ')}.`,
+      'The seed cannot create the admin account without them. Add a value after the "="\n    in .env, or delete .env and run `pnpm setup` again to regenerate it.',
+    )
+  }
+  ok('admin credentials present')
+}
+
 // --- 2. Docker ------------------------------------------------------------
 say('Local database')
 
@@ -140,5 +159,6 @@ if (seed.status !== 0) {
 console.log(`\n  ${GREEN}${BOLD}Ready.${RESET}\n`)
 console.log(`  ${BOLD}pnpm dev${RESET}     ${DIM}→ http://localhost:3000${RESET}`)
 console.log(`  ${DIM}admin panel  → http://localhost:3000/admin${RESET}`)
-console.log(`  ${DIM}login        → solutions@digitalkingz.com / ChangeMe-DigitalKingz-2026${RESET}`)
+console.log(`  ${DIM}admin email  → see SEED_ADMIN_EMAIL in .env${RESET}`)
+console.log(`  ${DIM}admin pass   → see SEED_ADMIN_PASSWORD in .env${RESET}`)
 console.log('')

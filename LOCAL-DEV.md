@@ -29,9 +29,11 @@ pnpm dev
 
 - Site → http://localhost:3000
 - Admin → http://localhost:3000/admin
-- Login → `solutions@digitalkingz.com` / `ChangeMe-DigitalKingz-2026`
+- Login → the `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD` values in your `.env`
 
-**Change that password on first login.**
+`pnpm setup` deliberately does not print the password to the terminal. Open `.env` to read it.
+Out of the box it is `solutions@digitalkingz.com` with the placeholder password from
+`.env.example`. **Change it on first login.**
 
 > **Why your build failed before:** there was no `.env` file. It's git-ignored on purpose so
 > secrets never end up in a repo or a zip, which means a fresh clone never has one.
@@ -197,6 +199,12 @@ Edit production content in the production admin panel.
 **`missing secret key. A secret key is needed to secure Payload.`**
 No `.env`. Run `pnpm setup`. (The preflight check now catches this before the build starts.)
 
+**`ValidationError: The following field is invalid: password`**
+`SEED_ADMIN_PASSWORD` in `.env` has no value after the `=`. A key with an empty value is an
+empty string, not "unset", so it reaches Payload and fails validation. Give it a value of 12+
+characters, or delete `.env` and run `pnpm setup` again. The seed now catches this itself and
+tells you which variable to fix.
+
 **`Nothing is listening on 127.0.0.1:5433`**
 Docker Desktop isn't running, or the container is stopped. Start Docker Desktop, then `pnpm db:up`.
 
@@ -242,8 +250,8 @@ corepack use pnpm@10.28.0
 
 1. **`pnpm build` before every push.** Non-negotiable.
 2. **Never commit `.env`.** It's git-ignored; keep it that way.
-3. **Different `PAYLOAD_SECRET` locally and in production.** Sharing it means a local leak is a
-   production compromise.
+3. **Different `PAYLOAD_SECRET` and `SEED_ADMIN_PASSWORD` locally and in production.** The
+   password in `.env.example` is public — the seed refuses to use it when `NODE_ENV=production`.
 4. **Edit content in the admin panel, not in the seed files** — unless you want the change to
    survive a database reset.
 5. **One change at a time.** Small commits are easy to roll back; a 40-file commit that breaks the
