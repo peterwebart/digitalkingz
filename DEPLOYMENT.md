@@ -42,9 +42,34 @@ Enable **Automatic Deployment** so `git push origin main` deploys.
 
 ## 3. Environment variables
 
-Set these in **Application → Environment Variables**. Mark `DATABASE_URI`, `PAYLOAD_SECRET`,
-`RESEND_API_KEY` and `CRM_WEBHOOK_SECRET` as build-time variables where Coolify offers the choice —
-the build connects to the database to prerender pages.
+Set these in **Application → Environment Variables**.
+
+### Build variables vs runtime variables
+
+Coolify offers a **"Build Variable"** toggle per variable. Getting this wrong is what produces the
+`SecretsUsedInArgOrEnv` warnings during the Docker build: anything marked as a build variable is
+passed to Nixpacks as a Docker `ARG`/`ENV` and is therefore recorded in the image's layer history,
+where anyone who can pull the image can read it.
+
+**Nothing secret is needed to compile this application.** The build does not connect to the
+database. Leave every secret unticked.
+
+| Variable | Build variable? | Why |
+|---|---|---|
+| `NEXT_PUBLIC_SERVER_URL` | **Yes** | `NEXT_PUBLIC_*` values are compiled into the output. It is a public URL, not a secret. |
+| `DATABASE_URI` | No | Needed by the running container only. |
+| `PAYLOAD_SECRET` | No | Needed by the running container only. |
+| `RESEND_API_KEY` | No | Read at request time when a lead is submitted. |
+| `CRM_WEBHOOK_SECRET` | No | Read at request time. |
+| `SEED_ADMIN_PASSWORD` | No | Read by `pnpm seed`, which is a manual operation. |
+| everything else | No | |
+
+There is a trade-off, and it is small. With no database at build time, the three index pages
+(`/`, `/services`, `/industries`) plus `sitemap.xml` and `llms.txt` are prerendered from static
+fallbacks and fill in from the CMS on their first revalidation — five minutes for the index pages,
+an hour for the sitemap. Everything else is either static copy or rendered on demand. If you would
+rather have a fully populated build, tick `DATABASE_URI` and `PAYLOAD_SECRET` as build variables
+and accept that they land in the image history. Runtime-only is the better default.
 
 ### Required
 
@@ -102,8 +127,25 @@ ENABLE_GRAPHQL_PLAYGROUND=false
 
 ## 4. First deploy
 
-Push to `main`. On the first boot Payload creates its schema automatically
-(`push` is enabled outside production; see the note below).
+Push to `main`. The build succeeds without a database — that is by design, and it is why no
+secret needs to reach the builder.
+
+**The database starts empty and `push` is disabled in production**, so the schema has to be
+created once. Two ways, pick one:
+
+**a. Generate migrations locally (preferred).** Against your local Docker Postgres:
+
+```bash
+pnpm db:migrate:create initial
+git add src/migrations && git commit -m "Add initial migration" && git push
+```
+
+Then run `pnpm db:migrate` from the Coolify terminal after the deploy, or set the start command to
+`pnpm db:migrate && pnpm start`.
+
+**b. One-off push.** Set `PAYLOAD_DB_PUSH=true` in Coolify, redeploy, let Payload create the
+schema, then **remove the variable**. Leaving it set lets any future deploy alter the live schema
+without review.
 
 Then seed the content. From the Coolify application terminal:
 
@@ -180,11 +222,26 @@ image upload.
 
 ## Troubleshooting
 
-**Build fails with `cannot connect to Postgres`**
-`DATABASE_URI` is not available at build time, or points at a hostname the build container cannot
-resolve. Use the internal service hostname and mark the variable as build-time. The build is
-designed to survive this — it falls back to on-demand rendering rather than failing — but you lose
-prerendering, so fix it.
+**Build fails asking for `.env`, or for `PAYLOAD_SECRET`**
+It should not. `.env` is local-only and the build needs no secrets. If you see this, the deployed
+commit predates the environment-architecture fix — check that `package.json` runs
+`node scripts/preflight.mjs --mode=build` on `prebuild`.
+
+**Build logs say "building without DATABASE_URI / PAYLOAD_SECRET"**
+That is the expected, healthy message on Coolify. Content routes render on first request and cache
+from there. See the build/runtime variable table in section 3.
+
+**`SecretsUsedInArgOrEnv` warnings during the Docker build**
+Coolify is passing those variables to Nixpacks as build arguments. Untick "Build Variable" on every
+secret; only `NEXT_PUBLIC_SERVER_URL` needs it.
+
+**`UndefinedVar: $NIXPACKS_PATH`**
+Generated inside the Dockerfile that Nixpacks writes itself. Not caused by anything in this repo
+and safe to ignore.
+
+**Server exits at startup naming a missing variable**
+Working as intended — `prestart` refuses to boot a server that cannot reach its database. Set the
+variable it names in Coolify → Environment Variables.
 
 **`Module not found: Can't resolve 'net'` / `'dns'`**
 A client component is importing a value from a module that transitively imports

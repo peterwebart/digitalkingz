@@ -28,3 +28,37 @@ export function envOr(key: string, fallback: string): string {
 export function hasEnv(key: string): boolean {
   return env(key) !== undefined
 }
+
+/** True when running under NODE_ENV=production (Coolify sets this). */
+export function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production'
+}
+
+/**
+ * True only while `next build` is compiling, including the static-generation
+ * worker processes it forks.
+ *
+ * This is the switch that lets the data layer degrade gracefully during image
+ * compilation — where no database exists — without also swallowing real
+ * database outages at runtime, where an error must stay an error so Next keeps
+ * serving the last good cached page instead of caching an empty one.
+ *
+ * `DK_BUILD_PHASE` is set explicitly by the `build` script rather than relying
+ * on Next's internal `NEXT_PHASE`, which is checked as a fallback for anyone
+ * running `next build` directly.
+ */
+export function isBuildPhase(): boolean {
+  return (
+    process.env.DK_BUILD_PHASE === '1' ||
+    process.env.NEXT_PHASE === 'phase-production-build'
+  )
+}
+
+/**
+ * True when Payload has enough configuration to connect at all. Used to skip
+ * a doomed connection attempt during a database-free build rather than pay for
+ * a pool timeout on every query.
+ */
+export function hasDatabaseConfig(): boolean {
+  return hasEnv('DATABASE_URI') && hasEnv('PAYLOAD_SECRET')
+}

@@ -13,6 +13,7 @@ import { Authors, Categories, Posts } from '@/collections/Posts'
 import { CaseStudies, Testimonials } from '@/collections/CaseStudies'
 import { Leads } from '@/collections/Leads'
 import { SiteSettings } from '@/globals/SiteSettings'
+import { env, hasEnv, isBuildPhase } from '@/lib/env'
 
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
@@ -51,10 +52,21 @@ export default buildConfig({
   db: postgresAdapter({
     pool: {
       connectionString: process.env.DATABASE_URI || '',
+      // Without a bound, an unreachable host hangs on the OS TCP timeout —
+      // minutes per query. Fail fast instead, so a misconfigured DATABASE_URI
+      // is reported rather than looking like a stalled build or a hung request.
+      connectionTimeoutMillis: isBuildPhase() ? 5_000 : 10_000,
     },
     // Schema changes are applied by Payload on boot in development. In
-    // production Coolify runs migrations, so leave push disabled there.
-    push: process.env.NODE_ENV !== 'production',
+    // production they go through migrations, so push is off by default.
+    //
+    // PAYLOAD_DB_PUSH=true overrides this for the very first production deploy,
+    // where the database is empty and no migration exists yet. Remove it once
+    // the schema is created; leaving it on lets a deploy alter the live schema
+    // without review.
+    push: hasEnv('PAYLOAD_DB_PUSH')
+      ? env('PAYLOAD_DB_PUSH') === 'true'
+      : process.env.NODE_ENV !== 'production',
     migrationDir: path.resolve(dirname, 'migrations'),
   }),
   sharp,

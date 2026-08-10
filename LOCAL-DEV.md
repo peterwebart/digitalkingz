@@ -35,9 +35,13 @@ pnpm dev
 Out of the box it is `solutions@digitalkingz.com` with the placeholder password from
 `.env.example`. **Change it on first login.**
 
-> **Why your build failed before:** there was no `.env` file. It's git-ignored on purpose so
+> **Why your local build failed before:** there was no `.env` file. It's git-ignored on purpose so
 > secrets never end up in a repo or a zip, which means a fresh clone never has one.
-> `pnpm dev` and `pnpm build` now check for it first and tell you exactly what to do.
+> `pnpm dev` checks for it first and tells you exactly what to do.
+>
+> `pnpm build` deliberately does **not**. A production image is compiled before any database
+> exists, so requiring `.env` there would make the project undeployable. The build validates
+> through `process.env` and falls back to static content when the CMS is unreachable.
 
 ---
 
@@ -181,8 +185,10 @@ Edit production content in the production admin panel.
 |---|---|
 | `pnpm setup` | Full local bootstrap. Safe to re-run. |
 | `pnpm dev` | Dev server with hot reload |
-| `pnpm build` | Production build. **Run before every push.** |
+| `pnpm build` | Production build. **Run before every push.** Needs no database. |
 | `pnpm start` | Serve the production build locally |
+| `pnpm db:migrate` | Apply schema migrations (production schema changes) |
+| `pnpm db:migrate:create` | Generate a migration after changing a collection |
 | `pnpm check` | Typecheck + lint + content validation |
 | `pnpm db:up` | Start the local Postgres container |
 | `pnpm db:down` | Stop it (data kept) |
@@ -197,7 +203,11 @@ Edit production content in the production admin panel.
 ## Troubleshooting
 
 **`missing secret key. A secret key is needed to secure Payload.`**
-No `.env`. Run `pnpm setup`. (The preflight check now catches this before the build starts.)
+Locally: no `.env`. Run `pnpm setup`. (`pnpm dev` catches this before the server starts.)
+
+This error cannot fail a production build any more — `pnpm build` runs without a database or a
+secret by design, because a Docker image is compiled before the database exists. See
+`DEPLOYMENT.md` section 3.
 
 **`ValidationError: The following field is invalid: password`**
 `SEED_ADMIN_PASSWORD` in `.env` has no value after the `=`. A key with an empty value is an
