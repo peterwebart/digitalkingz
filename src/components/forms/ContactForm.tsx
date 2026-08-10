@@ -75,8 +75,20 @@ export function ContactForm() {
     )
   }
 
+  const v = state.values
+
   return (
-    <form ref={formRef} action={formAction} className="flex flex-col gap-8" noValidate>
+    // `key` changes on each failed attempt. React 19 resets an uncontrolled
+    // form after every action, so the fields have to remount to pick up the
+    // defaults the server just echoed back — otherwise a rejected submission
+    // wipes everything the visitor typed.
+    <form
+      key={state.attempt ?? 0}
+      ref={formRef}
+      action={formAction}
+      className="flex flex-col gap-8"
+      noValidate
+    >
       {Object.entries(attribution).map(([key, value]) => (
         <input key={key} type="hidden" name={key} value={value} />
       ))}
@@ -108,6 +120,7 @@ export function ContactForm() {
           <Field
             label="Your name"
             name="name"
+            defaultValue={v?.name as string | undefined}
             required
             autoComplete="name"
             error={state.fieldErrors?.name}
@@ -115,15 +128,24 @@ export function ContactForm() {
           <Field
             label="Email"
             name="email"
+            defaultValue={v?.email as string | undefined}
             type="email"
             required
             autoComplete="email"
             error={state.fieldErrors?.email}
           />
-          <Field label="Phone" name="phone" type="tel" autoComplete="tel" error={state.fieldErrors?.phone} />
+          <Field
+            label="Phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
+            defaultValue={v?.phone as string | undefined}
+            error={state.fieldErrors?.phone}
+          />
           <Field
             label="Business name"
             name="company"
+            defaultValue={v?.company as string | undefined}
             required
             autoComplete="organization"
             error={state.fieldErrors?.company}
@@ -131,6 +153,7 @@ export function ContactForm() {
           <Field
             label="Current website"
             name="website"
+            defaultValue={v?.website as string | undefined}
             placeholder="example.com"
             autoComplete="url"
             error={state.fieldErrors?.website}
@@ -139,6 +162,7 @@ export function ContactForm() {
           <Field
             label="Industry"
             name="industry"
+            defaultValue={v?.industry as string | undefined}
             placeholder="e.g. dental, HVAC, SaaS"
             error={state.fieldErrors?.industry}
           />
@@ -160,6 +184,9 @@ export function ContactForm() {
                   type="checkbox"
                   name="services"
                   value={choice.value}
+                  defaultChecked={
+                    Array.isArray(v?.services) && v.services.includes(choice.value)
+                  }
                   className="sr-only"
                 />
                 {choice.label}
@@ -172,6 +199,7 @@ export function ContactForm() {
           <Select
             label="Approximate budget"
             name="budget"
+            defaultValue={(v?.budget as string) ?? ''}
             options={BUDGET_CHOICES}
             error={state.fieldErrors?.budget}
             hint="A range is fine. It tells us what is realistic to propose."
@@ -179,6 +207,7 @@ export function ContactForm() {
           <Select
             label="Timeline"
             name="timeline"
+            defaultValue={(v?.timeline as string) ?? ''}
             options={TIMELINE_CHOICES}
             error={state.fieldErrors?.timeline}
           />
@@ -190,6 +219,7 @@ export function ContactForm() {
           as="textarea"
           label="What are you trying to fix or build?"
           name="message"
+          defaultValue={v?.message as string | undefined}
           required
           rows={7}
           error={state.fieldErrors?.message}
@@ -204,6 +234,7 @@ export function ContactForm() {
             type="checkbox"
             name="consent"
             required
+            defaultChecked={v?.consent === 'on'}
             className="mt-0.5 size-4 shrink-0 cursor-pointer appearance-none rounded border border-ink-100/20 bg-ink-100/[0.03] checked:border-brand-500 checked:bg-brand-500 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
           />
           <span className="text-sm leading-relaxed text-ink-400">
@@ -347,12 +378,14 @@ function Select({
   options,
   error,
   hint,
+  defaultValue = '',
 }: {
   label: string
   name: string
   options: { label: string; value: string }[]
   error?: string
   hint?: string
+  defaultValue?: string
 }) {
   const id = `field-${name}`
   return (
@@ -364,7 +397,7 @@ function Select({
       <select
         id={id}
         name={name}
-        defaultValue=""
+        defaultValue={defaultValue}
         aria-invalid={error ? true : undefined}
         className={cn(
           inputBase,

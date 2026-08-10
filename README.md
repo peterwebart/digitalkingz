@@ -49,7 +49,9 @@ Full Windows walkthrough, the git → Coolify loop and troubleshooting: **`LOCAL
 | `pnpm build` | Import map + production build. **Must pass before any push.** Needs no `.env` and no database. |
 | `pnpm start` | Serve the production build (refuses to boot without DATABASE_URI / PAYLOAD_SECRET) |
 | `pnpm check` | Typecheck + lint + content validation |
-| `pnpm db:migrate` / `db:migrate:create` | Apply / generate Payload schema migrations |
+| `pnpm db:migrate` | Apply committed migrations (local and production use the same command) |
+| `pnpm db:migrate:create <name>` | Generate a migration after changing a collection |
+| `pnpm start:migrate` | Migrate then start — this is the Coolify start command |
 | `pnpm db:up` / `db:down` / `db:reset` / `db:logs` | Local Postgres container |
 | `pnpm seed` | Idempotent content seed — safe to re-run |
 | `pnpm content:check` | Content integrity: cross-references, SEO field limits, word counts |

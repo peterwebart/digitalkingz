@@ -30,6 +30,19 @@ const eslintConfig = [
       'react/no-unescaped-entities': 'off',
     },
   },
+  {
+    // Payload generates migrations with a fixed `{ db, payload, req }` signature
+    // whether or not every argument is used. Hand-editing them would be undone
+    // by the next `pnpm db:migrate:create`, so the exception lives here instead.
+    // Everything else is still linted — this only relaxes unused arguments.
+    files: ['src/migrations/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { args: 'none', varsIgnorePattern: '^_' },
+      ],
+    },
+  },
 ]
 
 export default eslintConfig

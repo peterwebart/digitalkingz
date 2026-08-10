@@ -30,7 +30,7 @@ const envFileExists = existsSync(envPath)
 // in the real environment always win, which is what Coolify relies on.
 if (envFileExists) config({ path: envPath, quiet: true })
 
-const VALID_MODES = ['dev', 'build', 'start', 'seed']
+const VALID_MODES = ['dev', 'build', 'start', 'seed', 'migrate']
 const modeArg = process.argv.find((a) => a.startsWith('--mode='))
 const mode = modeArg ? modeArg.slice('--mode='.length) : 'dev'
 if (!VALID_MODES.includes(mode)) {
@@ -236,6 +236,14 @@ if (mode === 'start') {
   // this is the first moment the full environment is knowable.
   requireVars(['DATABASE_URI', 'PAYLOAD_SECRET'], 'to start the server')
   warnLeadRouting()
+  await checkLocalDatabase()
+}
+
+if (mode === 'migrate') {
+  // Migrations need a reachable database and the secret Payload boots with —
+  // nothing else. Runs in the Coolify terminal and as part of the production
+  // start command, so the message has to make sense in both places.
+  requireVars(['DATABASE_URI', 'PAYLOAD_SECRET'], 'to run migrations')
   await checkLocalDatabase()
 }
 

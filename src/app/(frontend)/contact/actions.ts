@@ -124,6 +124,22 @@ export async function submitLead(
     gclid: str('gclid'),
   }
 
+  // Echoed back on failure so the visitor does not retype everything. The
+  // honeypot is deliberately excluded.
+  const submitted: LeadFormState['values'] = {
+    name: raw.name ?? '',
+    email: raw.email ?? '',
+    phone: raw.phone ?? '',
+    company: raw.company ?? '',
+    website: raw.website ?? '',
+    industry: raw.industry ?? '',
+    services: raw.services,
+    budget: raw.budget ?? '',
+    timeline: raw.timeline ?? '',
+    message: raw.message ?? '',
+    consent: raw.consent ? 'on' : '',
+  }
+
   const parsed = leadSchema.safeParse(raw)
 
   if (!parsed.success) {
@@ -136,6 +152,8 @@ export async function submitLead(
       status: 'error',
       message: 'Please check the highlighted fields and try again.',
       fieldErrors,
+      values: submitted,
+      attempt: (_prev.attempt ?? 0) + 1,
     }
   }
 
@@ -157,6 +175,8 @@ export async function submitLead(
       status: 'error',
       message:
         'That is a few submissions in a short window. Please email us directly and we will pick it up from there.',
+      values: submitted,
+      attempt: (_prev.attempt ?? 0) + 1,
     }
   }
 
@@ -209,6 +229,8 @@ export async function submitLead(
       status: 'error',
       message:
         'Something went wrong on our end and we did not want to pretend otherwise. Please email us directly and we will reply the same day.',
+      values: submitted,
+      attempt: (_prev.attempt ?? 0) + 1,
     }
   }
 

@@ -62,6 +62,20 @@ just log into `/admin` on the live site and edit.
 
 The rest of this is for code changes.
 
+There is a third kind worth separating out: **changing the CMS structure itself** — adding a field
+to a collection, renaming one, changing a dropdown's options. Those change the database schema, and
+the schema is version-controlled in `src/migrations`:
+
+```bash
+# after editing a file in src/collections or src/globals
+pnpm db:migrate:create add_whatever_you_added
+pnpm db:migrate
+pnpm generate:types
+```
+
+Commit `src/migrations` along with the collection change. The deploy applies it automatically. Skip
+this and production will run new code against an old schema, which fails at the first query.
+
 ---
 
 ## Daily loop for code changes
@@ -187,8 +201,9 @@ Edit production content in the production admin panel.
 | `pnpm dev` | Dev server with hot reload |
 | `pnpm build` | Production build. **Run before every push.** Needs no database. |
 | `pnpm start` | Serve the production build locally |
-| `pnpm db:migrate` | Apply schema migrations (production schema changes) |
-| `pnpm db:migrate:create` | Generate a migration after changing a collection |
+| `pnpm db:migrate` | Apply committed migrations |
+| `pnpm db:migrate:create <name>` | Generate a migration after changing a collection |
+| `pnpm payload migrate:status` | Show which migrations have run |
 | `pnpm check` | Typecheck + lint + content validation |
 | `pnpm db:up` | Start the local Postgres container |
 | `pnpm db:down` | Stop it (data kept) |
@@ -201,6 +216,14 @@ Edit production content in the production admin panel.
 ---
 
 ## Troubleshooting
+
+**`relation "services" does not exist` after pulling changes**
+Someone added a migration. Run `pnpm db:migrate`.
+
+**`pnpm db:migrate:create` says there is nothing to migrate, but you changed a collection**
+`PAYLOAD_DB_PUSH` is not `false` in your `.env`, so push already applied the change to your local
+database and there is no longer a difference to detect. Set it to `false`, run
+`pnpm db:reset && pnpm db:migrate && pnpm seed`, redo the collection change, and generate again.
 
 **`missing secret key. A secret key is needed to secure Payload.`**
 Locally: no `.env`. Run `pnpm setup`. (`pnpm dev` catches this before the server starts.)

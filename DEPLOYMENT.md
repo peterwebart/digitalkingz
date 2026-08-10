@@ -32,11 +32,19 @@ application container reaches it over the internal network, which is both faster
 | Branch | `main` |
 | Install command | `pnpm install --frozen-lockfile` |
 | Build command | `pnpm build` |
-| Start command | `pnpm start` |
+| Start command | `pnpm start:migrate` |
 | Port | `3000` |
 | Domain | `https://digitalkingz.com` |
 
 Enable **Automatic Deployment** so `git push origin main` deploys.
+
+`pnpm start:migrate` runs `pnpm db:migrate` and then `pnpm start`. Applying migrations as part of
+starting the container means the schema can never lag behind the code that expects it, and a
+migration that fails stops the deploy instead of letting the new build run against the old schema.
+It is a no-op on every restart where nothing has changed.
+
+For a destructive migration — dropping a column, rewriting an enum — run `pnpm db:migrate` by hand
+from the Coolify terminal first, read the output, and only then deploy.
 
 ---
 
@@ -56,13 +64,19 @@ database. Leave every secret unticked.
 
 | Variable | Build variable? | Why |
 |---|---|---|
-| `NEXT_PUBLIC_SERVER_URL` | **Yes** | `NEXT_PUBLIC_*` values are compiled into the output. It is a public URL, not a secret. |
+| `NEXT_PUBLIC_SERVER_URL` | **Yes — and as a runtime variable too** | Compiled into the output; see the warning below. It is a public URL, not a secret. |
 | `DATABASE_URI` | No | Needed by the running container only. |
 | `PAYLOAD_SECRET` | No | Needed by the running container only. |
 | `RESEND_API_KEY` | No | Read at request time when a lead is submitted. |
 | `CRM_WEBHOOK_SECRET` | No | Read at request time. |
 | `SEED_ADMIN_PASSWORD` | No | Read by `pnpm seed`, which is a manual operation. |
 | everything else | No | |
+
+`NEXT_PUBLIC_SERVER_URL` is genuinely required as a build variable, and it is worth understanding
+why. Next inlines `NEXT_PUBLIC_*` values at compile time — no runtime lookup survives into the
+build output, so setting it only at runtime has no effect at all. If it is missing at build time,
+`src/payload.config.ts` compiles `serverURL`, `cors` and `csrf` with the `http://localhost:3000`
+fallback, and the admin panel will reject its own requests in production. Set it in both places.
 
 There is a trade-off, and it is small. With no database at build time, the three index pages
 (`/`, `/services`, `/industries`) plus `sitemap.xml` and `llms.txt` are prerendered from static
@@ -130,22 +144,9 @@ ENABLE_GRAPHQL_PLAYGROUND=false
 Push to `main`. The build succeeds without a database — that is by design, and it is why no
 secret needs to reach the builder.
 
-**The database starts empty and `push` is disabled in production**, so the schema has to be
-created once. Two ways, pick one:
-
-**a. Generate migrations locally (preferred).** Against your local Docker Postgres:
-
-```bash
-pnpm db:migrate:create initial
-git add src/migrations && git commit -m "Add initial migration" && git push
-```
-
-Then run `pnpm db:migrate` from the Coolify terminal after the deploy, or set the start command to
-`pnpm db:migrate && pnpm start`.
-
-**b. One-off push.** Set `PAYLOAD_DB_PUSH=true` in Coolify, redeploy, let Payload create the
-schema, then **remove the variable**. Leaving it set lets any future deploy alter the live schema
-without review.
+The database starts empty. The schema comes from the migrations committed in `src/migrations`,
+and the start command applies them, so there is nothing to do by hand — the first boot creates all
+52 tables and records the migration in `payload_migrations`.
 
 Then seed the content. From the Coolify application terminal:
 
@@ -167,21 +168,47 @@ login.** Re-running the seed never modifies an existing account's password.
 
 ---
 
+## Contact form and email
+
+The contact form posts to a Next.js Server Action (`src/app/(frontend)/contact/actions.ts`).
+The order is deliberate: validate, persist the lead to Postgres, then attempt email and the
+CRM webhook. The lead is saved first so an enquiry is never lost to a mail or webhook
+failure, and the delivery outcome is written back onto the lead record.
+
+Lead notification email uses the Resend SDK directly and needs, at runtime:
+
+- `RESEND_API_KEY`
+- `LEAD_EMAIL_TO` — comma-separated recipients
+- `LEAD_EMAIL_FROM` — must be a domain verified in Resend
+
+With those unset the form still works and still stores every enquiry; it just skips the
+email and records "Email skipped" in the lead's delivery notes. Check Leads in `/admin`.
+
+**The `No email adapter provided` warning in the logs is a different thing.** That is
+Payload's own transactional email, used for admin password resets — not the contact form.
+It does not affect lead capture or lead notification. Configuring it is optional.
+
 ## 5. Schema changes after launch
 
-`src/payload.config.ts` sets `push: process.env.NODE_ENV !== 'production'`. In production, schema
-changes go through migrations, not automatic push. When you change a collection:
+Every schema change ships as a migration. When you change a collection:
 
 ```bash
-pnpm payload migrate:create describe_the_change
+pnpm db:migrate:create describe_the_change   # generates the SQL by diffing against your local DB
+pnpm db:migrate                              # applies it locally
 git add src/migrations && git commit && git push
 ```
 
-Then run `pnpm payload migrate` from the Coolify terminal after the deploy, or add it to the start
-command as `pnpm payload migrate && pnpm start`.
+The deploy applies it, because `pnpm start:migrate` runs `pnpm db:migrate` first. Check status any
+time with `pnpm payload migrate:status`.
+
+**Keep `PAYLOAD_DB_PUSH=false` locally.** Payload's alternative "push" mode syncs schema changes
+straight into your local database. Once it has, `db:migrate:create` sees no difference between your
+schema and your database, generates an empty migration, and the change silently never reaches
+production. If you ever do turn push on to experiment, reset the local database
+(`pnpm db:reset && pnpm db:migrate`) before generating a migration.
 
 If a change alters a `select` field's options, Postgres cannot always rewrite the underlying enum
-in place. Generate the migration and check it before deploying.
+in place. Generate the migration and read it before deploying.
 
 ---
 
@@ -242,6 +269,18 @@ and safe to ignore.
 **Server exits at startup naming a missing variable**
 Working as intended — `prestart` refuses to boot a server that cannot reach its database. Set the
 variable it names in Coolify → Environment Variables.
+
+**`relation "services" does not exist` or similar**
+The schema was never created. Confirm the start command is `pnpm start:migrate`, then check
+`pnpm payload migrate:status` from the Coolify terminal.
+
+**Admin panel loads but rejects logins or form posts in production**
+`NEXT_PUBLIC_SERVER_URL` was not set as a **build** variable, so Payload's `cors` and `csrf` lists
+compiled with the `http://localhost:3000` fallback. Set it as a build variable and redeploy — a
+runtime-only value cannot fix this, because the value is inlined at compile time.
+
+**`pnpm db:migrate:create` produces an empty migration**
+Your local database already has the change, applied by push. See section 5.
 
 **`Module not found: Can't resolve 'net'` / `'dns'`**
 A client component is importing a value from a module that transitively imports

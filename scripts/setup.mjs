@@ -143,7 +143,26 @@ for (let i = 0; i < 40; i += 1) {
 if (!up) die('Postgres did not come up within 40 seconds.', 'Check: docker compose logs postgres')
 ok('accepting connections')
 
-// --- 4. Seed --------------------------------------------------------------
+// --- 4. Migrations --------------------------------------------------------
+// The schema comes from the committed migrations, exactly as it does in
+// production. Local and production therefore create the same tables the same
+// way, which is the only reliable way to find a missing migration before a
+// deploy does.
+say('Applying database migrations')
+
+const migrate = spawnSync('pnpm', ['db:migrate'], {
+  stdio: 'inherit',
+  shell: process.platform === 'win32',
+})
+
+if (migrate.status !== 0) {
+  die(
+    'Migrations failed.',
+    'Scroll up for the error. If this is a fresh database, check that src/migrations\n    exists and is committed. Re-running `pnpm setup` is safe.',
+  )
+}
+
+// --- 5. Seed --------------------------------------------------------------
 say('Seeding content')
 
 const seed = spawnSync('pnpm', ['seed'], {
