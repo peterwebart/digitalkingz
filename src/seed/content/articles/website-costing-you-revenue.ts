@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'A website rarely fails loudly. It keeps loading, the form keeps working, and the loss gets absorbed into a marketing budget that looks fine. Here is how to find it.',
   category: 'web-design',
   publishedAt: '2026-01-21',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

@@ -12,6 +12,8 @@ import { Industries } from '@/collections/Industries'
 import { Authors, Categories, Posts } from '@/collections/Posts'
 import { CaseStudies, Testimonials } from '@/collections/CaseStudies'
 import { Leads } from '@/collections/Leads'
+import { People } from '@/collections/People'
+import { Taxonomies } from '@/collections/Taxonomies'
 import { SiteSettings } from '@/globals/SiteSettings'
 import { env, hasEnv, isBuildPhase } from '@/lib/env'
 
@@ -36,6 +38,8 @@ export default buildConfig({
     },
   },
   collections: [
+    People,
+    Taxonomies,
     Services,
     Industries,
     Posts,
@@ -56,6 +60,13 @@ export default buildConfig({
       // minutes per query. Fail fast instead, so a misconfigured DATABASE_URI
       // is reported rather than looking like a stalled build or a hung request.
       connectionTimeoutMillis: isBuildPhase() ? 5_000 : 10_000,
+      // Next forks several static-generation workers, each with its own pool.
+      // Left unbounded they exhausted Postgres max_connections once the people
+      // directory pushed the prerender count past 500, and the build died with
+      // "too many clients already". Four per worker is ample for rendering
+      // pages sequentially.
+      max: isBuildPhase() ? 4 : 10,
+      idleTimeoutMillis: 10_000,
     },
     // Schema changes are applied by Payload on boot in development. In
     // production they go through migrations, so push is off by default.

@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'Performance is a commercial variable, not a technical score. Here is what each metric measures, why field and lab tools disagree, and where the real losses come from.',
   category: 'web-design',
   publishedAt: '2026-05-19',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

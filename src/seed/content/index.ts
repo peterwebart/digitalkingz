@@ -40,6 +40,29 @@ import googleAdsVsSeo from './articles/google-ads-vs-seo'
 import coreWebVitalsRevenue from './articles/core-web-vitals-revenue'
 import leadToRevenueSystem from './articles/lead-to-revenue-system'
 
+// Editorial batch, converted by scripts/convert-articles.ts.
+import completeAiMarketingGuide from './articles/complete-ai-marketing-guide'
+import completeB2bMarketingGuide from './articles/complete-b2b-marketing-guide'
+import completeContentMarketingGuide from './articles/complete-content-marketing-guide'
+import completeConversionRateOptimizationGuide from './articles/complete-conversion-rate-optimization-guide'
+import completeDigitalMarketingGuide from './articles/complete-digital-marketing-guide'
+import completeGeoGuide from './articles/complete-geo-guide'
+import completeLeadGenerationGuide from './articles/complete-lead-generation-guide'
+import completeLocalSeoGuide from './articles/complete-local-seo-guide'
+import completeMarketingAnalyticsGuide from './articles/complete-marketing-analytics-guide'
+import completeMarketingAutomationGuide from './articles/complete-marketing-automation-guide'
+import completeMarketingGuideSmallBusiness from './articles/complete-marketing-guide-small-business'
+import completeSeoGuide from './articles/complete-seo-guide'
+import completeSocialMediaMarketingGuide from './articles/complete-social-media-marketing-guide'
+import completeWebsiteStrategyDevelopmentGuide from './articles/complete-website-strategy-development-guide'
+import googleAdsVsFacebookAdsVsSeo from './articles/google-ads-vs-facebook-ads-vs-seo'
+import howMuchDoesDigitalMarketingCost from './articles/how-much-does-digital-marketing-cost'
+import howMuchDoesGoogleAdsCost from './articles/how-much-does-google-ads-cost'
+import howToBuildADigitalMarketingStrategy from './articles/how-to-build-a-digital-marketing-strategy'
+import optimizeYourBusinessForAiSearch from './articles/optimize-your-business-for-ai-search'
+import seoVsGeoVsAeo from './articles/seo-vs-geo-vs-aeo'
+import websiteLeadGenerationMachine from './articles/website-lead-generation-machine'
+
 /**
  * Service order is the display order across the site. Grouped by category so
  * the mega menu, service hub and sitemap all read consistently.
@@ -80,6 +103,29 @@ export const articles: ArticleSeed[] = [
   localSeoChecklist,
   businessWebsiteCost,
   websiteCostingYouRevenue,
+
+  // Editorial batch.
+  completeAiMarketingGuide,
+  completeB2bMarketingGuide,
+  completeContentMarketingGuide,
+  completeConversionRateOptimizationGuide,
+  completeDigitalMarketingGuide,
+  completeGeoGuide,
+  completeLeadGenerationGuide,
+  completeLocalSeoGuide,
+  completeMarketingAnalyticsGuide,
+  completeMarketingAutomationGuide,
+  completeMarketingGuideSmallBusiness,
+  completeSeoGuide,
+  completeSocialMediaMarketingGuide,
+  completeWebsiteStrategyDevelopmentGuide,
+  googleAdsVsFacebookAdsVsSeo,
+  howMuchDoesDigitalMarketingCost,
+  howMuchDoesGoogleAdsCost,
+  howToBuildADigitalMarketingStrategy,
+  optimizeYourBusinessForAiSearch,
+  seoVsGeoVsAeo,
+  websiteLeadGenerationMachine,
 ]
 
 export const categories: CategorySeed[] = [
@@ -117,9 +163,9 @@ export const categories: CategorySeed[] = [
 
 export const authors: AuthorSeed[] = [
   {
-    slug: 'petru-barabula',
-    name: 'Petru Barabula',
-    role: 'Founder, Digital Kingz',
-    bio: 'Petru Barabula founded Digital Kingz to build digital systems that connect brand, website, search, conversion, CRM and automation into a single revenue engine. He works with owners and operators on the commercial architecture behind their digital presence, not just the marketing on top of it.',
+    slug: 'digital-kingz',
+    name: 'Digital Kingz',
+    role: 'Growth Systems Team',
+    bio: 'Digital Kingz builds digital systems that connect brand, website, search, conversion, CRM and automation into a single revenue engine. We work with owners and operators on the commercial architecture behind their digital presence, not just the marketing on top of it.',
   },
 ]

@@ -297,6 +297,41 @@ async function seed() {
   }
   log('relationships linked')
 
+  // --- Media --------------------------------------------------------------
+  // Uploaded through Payload rather than copied into public/, so the files get
+  // the collection's resize pipeline and a real media record. Matched on
+  // filename so re-running the seed reuses the existing upload instead of
+  // creating duplicates.
+  const { join, resolve: resolvePath } = await import('node:path')
+  const { existsSync } = await import('node:fs')
+  const mediaDir = resolvePath(process.cwd(), 'src/seed/media')
+  const mediaIds = new Map<string, number | string>()
+
+  for (const a of articles) {
+    if (!a.heroImage || mediaIds.has(a.heroImage)) continue
+    const filePath = join(mediaDir, a.heroImage)
+    if (!existsSync(filePath)) {
+      console.warn(`  ! hero image missing, skipped: ${a.heroImage}`)
+      continue
+    }
+    const found = await payload.find({
+      collection: 'media',
+      where: { filename: { equals: a.heroImage } },
+      limit: 1,
+    })
+    if (found.docs[0]) {
+      mediaIds.set(a.heroImage, found.docs[0].id)
+      continue
+    }
+    const created = await payload.create({
+      collection: 'media',
+      data: { alt: a.heroImageAlt ?? a.title },
+      filePath,
+    })
+    mediaIds.set(a.heroImage, created.id)
+  }
+  if (mediaIds.size > 0) console.log(`  media       ${mediaIds.size}`)
+
   // --- Articles -----------------------------------------------------------
   // Longest phrases first so "Local SEO" wins over "SEO".
   const linkTargets = [...services]
@@ -313,6 +348,7 @@ async function seed() {
       category: categoryIds.get(a.category)!,
       author: authorIds.get(a.author)!,
       featured: i < 3,
+      heroImage: a.heroImage ? mediaIds.get(a.heroImage) : undefined,
       body: blocksToLexical(linked),
       faqs: a.faqs,
       relatedServices: a.relatedServices

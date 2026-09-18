@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'Most businesses buy the pieces of their growth system separately, from different vendors, in different years. The money is lost in the seams nobody was hired to own.',
   category: 'growth',
   publishedAt: '2026-07-15',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

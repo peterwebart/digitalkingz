@@ -67,6 +67,8 @@ export interface Config {
   };
   blocks: {};
   collections: {
+    people: Person;
+    taxonomies: Taxonomy;
     services: Service;
     industries: Industry;
     posts: Post;
@@ -85,6 +87,8 @@ export interface Config {
   };
   collectionsJoins: {};
   collectionsSelect: {
+    people: PeopleSelect<false> | PeopleSelect<true>;
+    taxonomies: TaxonomiesSelect<false> | TaxonomiesSelect<true>;
     services: ServicesSelect<false> | ServicesSelect<true>;
     industries: IndustriesSelect<false> | IndustriesSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
@@ -143,6 +147,243 @@ export interface UserAuthOperations {
   unlock: {
     email: string;
     password: string;
+  };
+}
+/**
+ * Profiles at /people/[slug]. A profile is only worth indexing once it has a bio, an image and at least one verifiable source.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "people".
+ */
+export interface Person {
+  id: number;
+  /**
+   * Source system identifier. The importer matches on this before it matches on slug.
+   */
+  externalId?: string | null;
+  /**
+   * Canonical URL segment: /people/[slug].
+   */
+  slug: string;
+  /**
+   * Only published profiles are routable and appear in the sitemap.
+   */
+  status: 'draft' | 'review' | 'published';
+  /**
+   * 0-100, set by the importer. The quality threshold for indexing is applied against this.
+   */
+  completeness?: number | null;
+  name: string;
+  /**
+   * Legal or birth name, stage names. Comma separated. Used by search.
+   */
+  alternateNames?: string | null;
+  usernamePrimary?: string | null;
+  /**
+   * A person can legitimately be both.
+   */
+  personTypes: ('influencer' | 'public-figure')[];
+  gender?: string | null;
+  generation?: string | null;
+  dateOfBirth?: string | null;
+  nationality?: string | null;
+  city?: string | null;
+  /**
+   * Denormalised from the country taxonomy for fast filtering.
+   */
+  countryCode?: string | null;
+  countries?: (number | Taxonomy)[] | null;
+  regions?: (number | Taxonomy)[] | null;
+  industries?: (number | Taxonomy)[] | null;
+  sports?: (number | Taxonomy)[] | null;
+  platforms?: (number | Taxonomy)[] | null;
+  topics?: (number | Taxonomy)[] | null;
+  genres?: (number | Taxonomy)[] | null;
+  professions?: (number | Taxonomy)[] | null;
+  languages?: (number | Taxonomy)[] | null;
+  /**
+   * Shown on the result card and used for the default breadcrumb.
+   */
+  primaryIndustry?: (number | null) | Taxonomy;
+  sportRole?: string | null;
+  /**
+   * Comma separated. Free text, not yet a taxonomy.
+   */
+  niches?: string | null;
+  audienceType?: string | null;
+  audienceScope?: string | null;
+  /**
+   * One or two sentences. Used on cards and in meta descriptions.
+   */
+  bioShort?: string | null;
+  bioLong?: string | null;
+  knownFor?: string | null;
+  notableWork?: string | null;
+  awards?: string | null;
+  organizations?: string | null;
+  brands?: string | null;
+  profileImage?: (number | null) | Media;
+  coverImage?: (number | null) | Media;
+  socialProfiles?:
+    | {
+        platform: number | Taxonomy;
+        handle?: string | null;
+        url?: string | null;
+        followers?: number | null;
+        engagementRate?: number | null;
+        /**
+         * A follower count with no date on it is not a fact, it is a rumour.
+         */
+        lastCheckedAt?: string | null;
+        id?: string | null;
+      }[]
+    | null;
+  websiteUrl?: string | null;
+  wikipediaUrl?: string | null;
+  officialSourceUrl?: string | null;
+  verified?: boolean | null;
+  verificationDate?: string | null;
+  claimed?: boolean | null;
+  /**
+   * Internal. Never rendered on the public page.
+   */
+  editorialNotes?: string | null;
+  /**
+   * Controls the <title>, meta description and social preview for this page.
+   */
+  seo: {
+    /**
+     * Aim for 50-60 characters. Google truncates beyond roughly 60.
+     */
+    metaTitle: string;
+    /**
+     * Aim for 140-158 characters. Written to earn the click, not to describe.
+     */
+    metaDescription: string;
+    /**
+     * Optional. Falls back to the generated brand card if empty.
+     */
+    ogImage?: (number | null) | Media;
+    /**
+     * Exclude this page from search engines and the sitemap.
+     */
+    noIndex?: boolean | null;
+  };
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Countries, industries, sports, platforms and the other ways people are classified. Each row can become a landing page once it holds enough profiles.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "taxonomies".
+ */
+export interface Taxonomy {
+  id: number;
+  /**
+   * Determines the URL segment this term lives under.
+   */
+  type:
+    | 'person-type'
+    | 'country'
+    | 'region'
+    | 'industry'
+    | 'sport'
+    | 'platform'
+    | 'topic'
+    | 'genre'
+    | 'profession'
+    | 'language'
+    | 'audience-type';
+  /**
+   * Lowercase, hyphenated. Unique within its type.
+   */
+  slug: string;
+  title: string;
+  /**
+   * Intro copy for the landing page. A term with no description should not be indexed — it is a thin page.
+   */
+  description?: string | null;
+  /**
+   * ISO 3166-1 alpha-2, used for flags and hreflang.
+   */
+  countryCode?: string | null;
+  /**
+   * Optional. Lets countries roll up into a region.
+   */
+  parent?: (number | null) | Taxonomy;
+  /**
+   * Maintained by the importer. Drives whether this term is worth a landing page.
+   */
+  personCount?: number | null;
+  /**
+   * Surface this term on the People homepage.
+   */
+  featured?: boolean | null;
+  order?: number | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Images used across the site. Alt text is required for accessibility and SEO.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "media".
+ */
+export interface Media {
+  id: number;
+  /**
+   * Describe what the image shows, for screen readers and image search. Leave decorative images with a short factual description.
+   */
+  alt: string;
+  /**
+   * Optional. Displayed under the image where the layout supports it.
+   */
+  caption?: string | null;
+  updatedAt: string;
+  createdAt: string;
+  url?: string | null;
+  thumbnailURL?: string | null;
+  filename?: string | null;
+  mimeType?: string | null;
+  filesize?: number | null;
+  width?: number | null;
+  height?: number | null;
+  focalX?: number | null;
+  focalY?: number | null;
+  sizes?: {
+    thumbnail?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    card?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    wide?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
+    og?: {
+      url?: string | null;
+      width?: number | null;
+      height?: number | null;
+      mimeType?: string | null;
+      filesize?: number | null;
+      filename?: string | null;
+    };
   };
 }
 /**
@@ -378,68 +619,6 @@ export interface Industry {
   };
   updatedAt: string;
   createdAt: string;
-}
-/**
- * Images used across the site. Alt text is required for accessibility and SEO.
- *
- * This interface was referenced by `Config`'s JSON-Schema
- * via the `definition` "media".
- */
-export interface Media {
-  id: number;
-  /**
-   * Describe what the image shows, for screen readers and image search. Leave decorative images with a short factual description.
-   */
-  alt: string;
-  /**
-   * Optional. Displayed under the image where the layout supports it.
-   */
-  caption?: string | null;
-  updatedAt: string;
-  createdAt: string;
-  url?: string | null;
-  thumbnailURL?: string | null;
-  filename?: string | null;
-  mimeType?: string | null;
-  filesize?: number | null;
-  width?: number | null;
-  height?: number | null;
-  focalX?: number | null;
-  focalY?: number | null;
-  sizes?: {
-    thumbnail?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    card?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    wide?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-    og?: {
-      url?: string | null;
-      width?: number | null;
-      height?: number | null;
-      mimeType?: string | null;
-      filesize?: number | null;
-      filename?: string | null;
-    };
-  };
 }
 /**
  * Articles live at /growth-hub/[slug].
@@ -906,6 +1085,14 @@ export interface PayloadLockedDocument {
   id: number;
   document?:
     | ({
+        relationTo: 'people';
+        value: number | Person;
+      } | null)
+    | ({
+        relationTo: 'taxonomies';
+        value: number | Taxonomy;
+      } | null)
+    | ({
         relationTo: 'services';
         value: number | Service;
       } | null)
@@ -986,6 +1173,94 @@ export interface PayloadMigration {
   batch?: number | null;
   updatedAt: string;
   createdAt: string;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "people_select".
+ */
+export interface PeopleSelect<T extends boolean = true> {
+  externalId?: T;
+  slug?: T;
+  status?: T;
+  completeness?: T;
+  name?: T;
+  alternateNames?: T;
+  usernamePrimary?: T;
+  personTypes?: T;
+  gender?: T;
+  generation?: T;
+  dateOfBirth?: T;
+  nationality?: T;
+  city?: T;
+  countryCode?: T;
+  countries?: T;
+  regions?: T;
+  industries?: T;
+  sports?: T;
+  platforms?: T;
+  topics?: T;
+  genres?: T;
+  professions?: T;
+  languages?: T;
+  primaryIndustry?: T;
+  sportRole?: T;
+  niches?: T;
+  audienceType?: T;
+  audienceScope?: T;
+  bioShort?: T;
+  bioLong?: T;
+  knownFor?: T;
+  notableWork?: T;
+  awards?: T;
+  organizations?: T;
+  brands?: T;
+  profileImage?: T;
+  coverImage?: T;
+  socialProfiles?:
+    | T
+    | {
+        platform?: T;
+        handle?: T;
+        url?: T;
+        followers?: T;
+        engagementRate?: T;
+        lastCheckedAt?: T;
+        id?: T;
+      };
+  websiteUrl?: T;
+  wikipediaUrl?: T;
+  officialSourceUrl?: T;
+  verified?: T;
+  verificationDate?: T;
+  claimed?: T;
+  editorialNotes?: T;
+  seo?:
+    | T
+    | {
+        metaTitle?: T;
+        metaDescription?: T;
+        ogImage?: T;
+        noIndex?: T;
+      };
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "taxonomies_select".
+ */
+export interface TaxonomiesSelect<T extends boolean = true> {
+  type?: T;
+  slug?: T;
+  title?: T;
+  description?: T;
+  countryCode?: T;
+  parent?: T;
+  personCount?: T;
+  featured?: T;
+  order?: T;
+  updatedAt?: T;
+  createdAt?: T;
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema

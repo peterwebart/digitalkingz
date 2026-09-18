@@ -242,27 +242,54 @@ export async function submitLead(
     .map((s) => s.trim())
     .filter(Boolean)
 
-  if (resendKey && to.length > 0) {
+  // Resend returns API errors in the response body rather than throwing, so the
+  // rejection branch is the one that matters and it used to log nothing. Every
+  // branch logs now. Never logs the key, the mailbox or the recipients — only
+  // the sender domain, which is the usual culprit.
+  const from = env('LEAD_EMAIL_FROM')
+  const senderDomain = from?.match(/@([^\s>]+)/)?.[1] ?? 'none'
+  const missing = [
+    !resendKey && 'RESEND_API_KEY',
+    !from && 'LEAD_EMAIL_FROM',
+    to.length === 0 && 'LEAD_EMAIL_TO',
+  ].filter(Boolean) as string[]
+
+  if (missing.length > 0) {
+    // The previous fallback sender, onboarding@resend.dev, only delivers to the
+    // Resend account owner, so a missing sender produced a 403 that looked like
+    // a code fault. A missing sender is a configuration error, reported as one.
+    const note = `Email skipped: ${missing.join(', ')} not configured.`
+    deliveryNotes.push(note)
+    console.error(`[lead] ${note} Lead ${leadId} saved but not emailed.`)
+  } else {
+    console.info(
+      `[lead] Sending notification for lead ${leadId} via Resend. ` +
+        `senderDomain=${senderDomain} recipients=${to.length}`,
+    )
     try {
       const resend = new Resend(resendKey)
       const result = await resend.emails.send({
-        from: envOr('LEAD_EMAIL_FROM', 'Digital Kingz <onboarding@resend.dev>'),
+        from: from as string,
         to,
         replyTo: data.email,
         subject: `New enquiry (${score}/100) - ${data.company}`,
         html: renderEmail(data, score),
       })
       if (result.error) {
-        deliveryNotes.push(`Email failed: ${result.error.message}`)
+        const { name, message } = result.error
+        deliveryNotes.push(`Email failed: ${name}: ${message}`)
+        console.error(
+          `[lead] Resend rejected the send. name=${name} message=${message} senderDomain=${senderDomain}`,
+        )
       } else {
         notificationSent = true
+        console.info(`[lead] Resend accepted the send. id=${result.data?.id ?? 'unknown'}`)
       }
     } catch (error) {
-      deliveryNotes.push(`Email threw: ${error instanceof Error ? error.message : 'unknown error'}`)
-      console.error('[lead] Resend failed', error)
+      const message = error instanceof Error ? error.message : 'unknown error'
+      deliveryNotes.push(`Email threw: ${message}`)
+      console.error(`[lead] Resend call threw before a response. message=${message}`)
     }
-  } else {
-    deliveryNotes.push('Email skipped: RESEND_API_KEY or LEAD_EMAIL_TO not configured.')
   }
 
   // 3. Forward to the CRM / automation platform.

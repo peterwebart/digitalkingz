@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'A form fill is not a lead, it is an option that expires. Here is how AI qualification converts inbound enquiries into booked calls, and where it must never be trusted alone.',
   category: 'ai-automation',
   publishedAt: '2026-06-17',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

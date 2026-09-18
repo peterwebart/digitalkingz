@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'Quotes for what looks like the same website routinely differ by a factor of twenty. Here is what actually drives the number, what each tier of the market buys, and how to set a budget from your own economics.',
   category: 'web-design',
   publishedAt: '2026-02-11',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

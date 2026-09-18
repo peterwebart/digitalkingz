@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'AI assistants now answer the questions that used to start a search. Getting named in those answers depends on how these systems source information, which is not how classic search ranking works.',
   category: 'seo',
   publishedAt: '2026-05-06',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

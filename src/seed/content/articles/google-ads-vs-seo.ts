@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'Paid is rented, immediate and linear. Organic is owned, delayed and compounding. Which one deserves the next dollar depends on seven variables specific to your business.',
   category: 'paid-media',
   publishedAt: '2026-04-08',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',

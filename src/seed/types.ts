@@ -131,6 +131,10 @@ export interface ArticleSeed {
   publishedAt: string
   /** Author slug. */
   author: string
+  /** Filename in src/seed/media, uploaded and attached as the hero image. */
+  heroImage?: string
+  /** Describes what the image shows. Required whenever heroImage is set. */
+  heroImageAlt?: string
   body: ContentBlock[]
   faqs: Faq[]
   /** Slugs of services this article should funnel into. */

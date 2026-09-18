@@ -20,7 +20,39 @@
  */
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { config } from 'dotenv'
+
+/**
+ * Minimal .env reader, deliberately dependency-free.
+ *
+ * This script runs on `prebuild`, so anything it imports becomes a hard
+ * requirement for building the application. It used to import a devDependency,
+ * which meant a missing or pruned node_modules failed the build before Next
+ * even started, with an error pointing at the package rather than at the real
+ * problem. Node's own primitives are enough for a key=value file.
+ *
+ * Values already present in the real environment always win, which is what
+ * Coolify relies on.
+ */
+function loadEnvFile(path) {
+  for (const line of readFileSync(path, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim()
+    if (trimmed.length === 0 || trimmed.startsWith('#')) continue
+
+    const eq = trimmed.indexOf('=')
+    if (eq < 1) continue
+
+    const key = trimmed.slice(0, eq).trim().replace(/^export\s+/, '')
+    if (key in process.env) continue
+
+    let value = trimmed.slice(eq + 1).trim()
+    const quote = value[0]
+    if ((quote === '"' || quote === "'") && value.endsWith(quote) && value.length > 1) {
+      value = value.slice(1, -1)
+      if (quote === '"') value = value.replace(/\\n/g, '\n')
+    }
+    process.env[key] = value
+  }
+}
 
 const root = process.cwd()
 const envPath = resolve(root, '.env')
@@ -28,7 +60,7 @@ const envFileExists = existsSync(envPath)
 
 // Load .env when it is there, carry on when it is not. Values already present
 // in the real environment always win, which is what Coolify relies on.
-if (envFileExists) config({ path: envPath, quiet: true })
+if (envFileExists) loadEnvFile(envPath)
 
 const VALID_MODES = ['dev', 'build', 'start', 'seed', 'migrate']
 const modeArg = process.argv.find((a) => a.startsWith('--mode='))
@@ -145,6 +177,7 @@ function warnLeadRouting() {
   const soft = []
   if (!value('RESEND_API_KEY')) soft.push('RESEND_API_KEY (no lead emails)')
   if (!value('LEAD_EMAIL_TO')) soft.push('LEAD_EMAIL_TO (no lead emails)')
+  if (!value('LEAD_EMAIL_FROM')) soft.push('LEAD_EMAIL_FROM (no lead emails)')
   if (!value('CRM_WEBHOOK_URL')) soft.push('CRM_WEBHOOK_URL (no CRM handoff)')
   if (soft.length === 0) return
 
@@ -152,6 +185,20 @@ function warnLeadRouting() {
   console.warn(`${YELLOW}  Lead routing is not fully configured:${RESET}`)
   soft.forEach((m) => console.warn(`${YELLOW}    ! ${m}${RESET}`))
   console.warn(`${DIM}  Enquiries will still be saved to the CMS and visible at /admin.${RESET}`)
+  console.warn('')
+}
+
+/** Warns when the Resend sender is not a shape Resend will accept. */
+function warnSender() {
+  const from = value('LEAD_EMAIL_FROM')
+  if (!from) return
+  const plain = /^[^<>@\s]+@[^<>@\s.]+\.[^<>@\s]+$/.test(from)
+  const named = /<[^<>@\s]+@[^<>@\s.]+\.[^<>@\s]+>$/.test(from)
+  if (plain || named) return
+  console.warn('')
+  console.warn(`${YELLOW}  ! LEAD_EMAIL_FROM does not look like an address Resend will accept.${RESET}`)
+  console.warn(`${DIM}    Expected "you@yourdomain.com" or "Name <you@yourdomain.com>".${RESET}`)
+  console.warn(`${DIM}    The domain must be verified in Resend or every send returns 403.${RESET}`)
   console.warn('')
 }
 
@@ -236,6 +283,7 @@ if (mode === 'start') {
   // this is the first moment the full environment is knowable.
   requireVars(['DATABASE_URI', 'PAYLOAD_SECRET'], 'to start the server')
   warnLeadRouting()
+  warnSender()
   await checkLocalDatabase()
 }
 

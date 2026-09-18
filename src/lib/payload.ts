@@ -51,7 +51,7 @@ function report(label: string, reason: string): void {
  * Runs a query, or returns `fallback` when the database is unreachable during
  * a build. Rethrows everywhere else.
  */
-async function safeRead<T>(label: string, read: () => Promise<T>, fallback: T): Promise<T> {
+export async function safeRead<T>(label: string, read: () => Promise<T>, fallback: T): Promise<T> {
   // Skip the connection attempt entirely when the build was never given
   // credentials. Payload would throw on init anyway, and a wrong or absent
   // host otherwise costs a pool timeout on every single query.

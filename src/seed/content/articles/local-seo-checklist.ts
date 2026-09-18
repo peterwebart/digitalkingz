@@ -10,7 +10,7 @@ const article: ArticleSeed = {
     'Most local SEO checklists list tasks nobody sequences. This one is ordered by what actually influences relevance and prominence, and by how quickly each item pays.',
   category: 'seo',
   publishedAt: '2026-03-24',
-  author: 'petru-barabula',
+  author: 'digital-kingz',
   body: [
     {
       type: 'p',
