@@ -2,6 +2,14 @@ import { withPayload } from '@payloadcms/next/withPayload'
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The directory moved from /people to /influencers. Those URLs were built and
+  // may already be crawled, so they redirect permanently rather than 404.
+  async redirects() {
+    return [
+      { source: '/people', destination: '/influencers', permanent: true },
+      { source: '/people/:path*', destination: '/influencers/:path*', permanent: true },
+    ]
+  },
   reactStrictMode: true,
   poweredByHeader: false,
   compress: true,

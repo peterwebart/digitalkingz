@@ -1,9 +1,12 @@
+import Image from 'next/image'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import type { Metadata } from 'next'
 import { ArrowRight } from 'lucide-react'
 import { JsonLd } from '@/components/JsonLd'
 import { RichText } from '@/components/RichText'
+import { TableOfContents } from '@/components/sections/TableOfContents'
+import { extractHeadings } from '@/lib/toc'
 import { FAQList } from '@/components/sections/FAQ'
 import { Breadcrumbs } from '@/components/sections/PageHero'
 import { CTASection } from '@/components/sections/CTASection'
@@ -13,7 +16,7 @@ import { Reveal } from '@/components/ui/Reveal'
 import { Section } from '@/components/ui/Section'
 import { getPost, getPosts, postParams } from '@/lib/payload'
 import { articleSchema, breadcrumbSchema, buildMetadata, faqSchema } from '@/lib/seo'
-import { formatDate } from '@/lib/utils'
+import { formatDate, mediaSrc } from '@/lib/utils'
 import type { Author, Category, Service } from '@/payload-types'
 
 export const revalidate = 300
@@ -50,6 +53,16 @@ export default async function ArticlePage({ params }: Params) {
   if (!post) notFound()
 
   const category = typeof post.category === 'object' ? (post.category as Category) : null
+  // Article images were invisible because nothing rendered them. The field was
+  // added to the collection and populated by the seed, but no component ever
+  // read it — not a media URL or upload problem.
+  const headings = extractHeadings(post.body)
+
+  const hero =
+    typeof post.heroImage === 'object' && post.heroImage !== null && post.heroImage.url
+      ? post.heroImage
+      : null
+
   const author = typeof post.author === 'object' ? (post.author as Author) : null
   const relatedServices = Array.isArray(post.relatedServices)
     ? (post.relatedServices.filter((s) => typeof s === 'object' && s !== null) as Service[])
@@ -118,7 +131,39 @@ export default async function ArticlePage({ params }: Params) {
               <h1 className="text-display-xl text-balance">{post.title}</h1>
 
               {post.excerpt ? (
-                <p className="text-lead text-ink-400">{post.excerpt}</p>
+                // Quick answer. The excerpt already holds a self-contained
+                // summary — hand-written, lifted from each article's editorial
+                // brief — so it is labelled and given its own block rather than
+                // left as an unmarked lead paragraph. An answer engine can
+                // extract this without the surrounding article.
+                <div className="rounded-xl border border-brand-500/20 bg-brand-500/[0.04] p-6">
+                  <p className="mb-2 font-mono text-[0.625rem] uppercase tracking-[0.14em] text-brand-400">
+                    Quick answer
+                  </p>
+                  <p className="text-[1.0625rem] leading-relaxed text-ink-200">{post.excerpt}</p>
+                </div>
+              ) : null}
+
+              {hero ? (
+                <figure className="flex flex-col gap-2">
+                  <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-ink-100/10 bg-ink-900">
+                    <Image
+                      src={mediaSrc(hero.url as string)}
+                      alt={hero.alt ?? post.title}
+                      fill
+                      // Reserves the box before the file arrives, so the hero
+                      // cannot shift the headline down as it loads.
+                      sizes="(max-width: 768px) 100vw, 760px"
+                      priority
+                      className="object-cover"
+                    />
+                  </div>
+                  {hero.caption ? (
+                    <figcaption className="text-xs leading-relaxed text-ink-600">
+                      {hero.caption}
+                    </figcaption>
+                  ) : null}
+                </figure>
               ) : null}
 
               {author ? (
@@ -141,8 +186,18 @@ export default async function ArticlePage({ params }: Params) {
         </header>
 
         <div className="container-page">
-          <div className="container-prose py-14 md:py-20">
-            <RichText data={post.body} />
+          {/* Body sits in a readable measure; the contents column only appears
+              on wide screens, so the article never narrows on tablets. */}
+          <div className="container-page py-14 md:py-20">
+            <div className="mx-auto flex max-w-[46rem] flex-col gap-0 lg:max-w-none lg:flex-row lg:items-start lg:justify-center lg:gap-14">
+              <div className="w-full lg:max-w-[46rem]">
+                <TableOfContents headings={headings} variant="mobile" />
+                <RichText data={post.body} />
+              </div>
+              <aside className="hidden w-60 shrink-0 lg:block">
+                <TableOfContents headings={headings} variant="desktop" />
+              </aside>
+            </div>
           </div>
         </div>
 

@@ -150,7 +150,7 @@ export interface UserAuthOperations {
   };
 }
 /**
- * Profiles at /people/[slug]. A profile is only worth indexing once it has a bio, an image and at least one verifiable source.
+ * Profiles at /influencers/[slug]. A profile is only worth indexing once it has a bio, an image and at least one verifiable source.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "people".
@@ -162,13 +162,17 @@ export interface Person {
    */
   externalId?: string | null;
   /**
-   * Canonical URL segment: /people/[slug].
+   * Canonical URL segment: /influencers/[slug].
    */
   slug: string;
   /**
    * Only published profiles are routable and appear in the sitemap.
    */
   status: 'draft' | 'review' | 'published';
+  /**
+   * First letter of the name, set by the importer. Exists because Payload wraps every `like` in wildcards, so "A%" matches any name containing A rather than one starting with it. A-Z, or # for anything else.
+   */
+  nameInitial?: string | null;
   /**
    * 0-100, set by the importer. The quality threshold for indexing is applied against this.
    */
@@ -1182,6 +1186,7 @@ export interface PeopleSelect<T extends boolean = true> {
   externalId?: T;
   slug?: T;
   status?: T;
+  nameInitial?: T;
   completeness?: T;
   name?: T;
   alternateNames?: T;

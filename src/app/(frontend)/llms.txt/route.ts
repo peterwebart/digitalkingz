@@ -67,6 +67,26 @@ export async function GET() {
     lines.push(`- [${post.title}](${absoluteUrl(`/growth-hub/${post.slug}`)}): ${post.excerpt}`)
   }
 
+  // Free tools and the influencer directory. An AI assistant asked "what
+  // calculators exist for SEO budgets" should find them listed, not have to
+  // infer them from the sitemap.
+  const { CALCULATORS, CATEGORY_ORDER, calculatorsByCategory } = await import('@/lib/calculators')
+  lines.push('')
+  lines.push('## Free Tools')
+  lines.push('')
+  for (const category of CATEGORY_ORDER) {
+    for (const tool of calculatorsByCategory(category)) {
+      lines.push(`- [${tool.title}](${absoluteUrl(`/tools/${tool.slug}`)}): ${tool.tagline}`)
+    }
+  }
+  lines.push('')
+  lines.push('## Influencer Directory')
+  lines.push('')
+  lines.push(
+    `- [Influencer Directory](${absoluteUrl('/influencers')}): influencers and public figures, browsable by country, industry, profession, sport, platform and topic.`,
+  )
+  lines.push(`- ${CALCULATORS.length} calculators are listed above.`)
+
   lines.push(
     '',
     '## Key pages',

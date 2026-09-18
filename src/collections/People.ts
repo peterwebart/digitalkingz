@@ -5,7 +5,7 @@ import { seoGroup } from '@/fields/shared'
 /**
  * A person in the directory.
  *
- * One canonical identity at /people/{slug}, as the roadmap specifies, so that
+ * One canonical identity at /influencers/{slug}, as the roadmap specifies, so that
  * reclassifying somebody from Influencer to Public Figure — or marking them as
  * both — never changes their URL.
  *
@@ -24,7 +24,7 @@ export const People: CollectionConfig = {
     useAsTitle: 'name',
     defaultColumns: ['name', 'personTypes', 'status', 'completeness', 'updatedAt'],
     description:
-      'Profiles at /people/[slug]. A profile is only worth indexing once it has a bio, an image and at least one verifiable source.',
+      'Profiles at /influencers/[slug]. A profile is only worth indexing once it has a bio, an image and at least one verifiable source.',
   },
   access: {
     create: authenticated,
@@ -50,7 +50,7 @@ export const People: CollectionConfig = {
       required: true,
       unique: true,
       index: true,
-      admin: { position: 'sidebar', description: 'Canonical URL segment: /people/[slug].' },
+      admin: { position: 'sidebar', description: 'Canonical URL segment: /influencers/[slug].' },
     },
     {
       name: 'status',
@@ -62,6 +62,18 @@ export const People: CollectionConfig = {
       admin: {
         position: 'sidebar',
         description: 'Only published profiles are routable and appear in the sitemap.',
+      },
+    },
+    {
+      name: 'nameInitial',
+      type: 'text',
+      maxLength: 1,
+      index: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description:
+          'First letter of the name, set by the importer. Exists because Payload wraps every `like` in wildcards, so "A%" matches any name containing A rather than one starting with it. A-Z, or # for anything else.',
       },
     },
     {

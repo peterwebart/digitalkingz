@@ -126,6 +126,10 @@ function addTerm(type: string, slug: string, title?: string, countryCode?: strin
   const t = type.replace(/_/g, '-') as TaxonomyType
   if (!TAXONOMY_TYPES.includes(t)) { issues.push(`Unknown taxonomy type "${type}" (skipped)`); return null }
   if (!slug) return null
+  // Never let an unsafe slug become a URL, whatever the caller passed.
+  const safe = slugify(slug)
+  if (!safe) return null
+  slug = safe
   const key: TermKey = `${t}:${slug}`
   const existing = terms.get(key)
   if (existing) {
@@ -137,10 +141,35 @@ function addTerm(type: string, slug: string, title?: string, countryCode?: strin
   return key
 }
 
+// The taxonomy file identifies countries by ISO code ("ca", "gb", "au") while
+// people.csv names them in full ("Canada", "United Kingdom"). Importing both
+// produced two terms for the same country — 158 country terms for 137 actual
+// countries. Build a code -> canonical slug map and fold the codes into it.
+const countryByCode = new Map<string, { slug: string; title: string }>()
+for (const p of people) {
+  const code = (p.country_code || '').trim().toLowerCase()
+  if (code.length === 2 && p.country && !countryByCode.has(code)) {
+    countryByCode.set(code, { slug: slugify(p.country), title: p.country })
+  }
+}
+
+/** Folds a two-letter country slug onto the full-name slug where known. */
+function canonicalCountry(slug: string): string {
+  const mapped = slug.length === 2 ? countryByCode.get(slug) : undefined
+  return mapped ? mapped.slug : slug
+}
+
 // From the taxonomy file (slugs only, no titles).
 const byPerson = new Map<string, TermKey[]>()
 for (const row of taxonomyRows) {
-  const key = addTerm(row.taxonomy_type, row.taxonomy_slug)
+  // Slugify rather than trust the file. Thirteen slugs in the supplied CSV
+  // carry literal ampersands ("arts-&-media"), which produced malformed URLs
+  // and an invalid sitemap: a bare & is not legal XML.
+  const rawSlug = slugify(row.taxonomy_slug)
+  const key = addTerm(
+    row.taxonomy_type,
+    row.taxonomy_type === 'country' ? canonicalCountry(rawSlug) : rawSlug,
+  )
   if (!key) continue
   const list = byPerson.get(row.person_id) ?? []
   list.push(key)
@@ -260,6 +289,7 @@ for (const p of people) {
     externalId: p.person_id || undefined,
     slug: p.slug,
     name: p.name,
+    nameInitial: /^[A-Za-z]/.test(p.name) ? p.name[0].toUpperCase() : '#',
     status: (PUBLISH_ABOVE !== null && completeness >= PUBLISH_ABOVE
       ? 'published'
       : 'draft') as 'draft' | 'published',

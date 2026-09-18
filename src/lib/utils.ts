@@ -63,3 +63,26 @@ export function absoluteUrl(path = '/'): string {
   if (!path.startsWith('/')) return `${base}/${path}`
   return `${base}${path}`
 }
+
+/**
+ * Makes a Payload media URL relative.
+ *
+ * Payload prefixes uploads with `serverURL`, producing an absolute URL. Next's
+ * image optimiser treats any absolute URL as remote and rejects it with a 400
+ * unless the host is listed in `images.remotePatterns` — which is the second
+ * reason article images were not appearing.
+ *
+ * Stripping the origin is better than whitelisting the host: it works on any
+ * domain without config, and it stops the server making an HTTP request to
+ * itself to fetch a file already on its own disk.
+ */
+export function mediaSrc(url: string): string {
+  if (!url) return url
+  if (url.startsWith('/')) return url
+  try {
+    const parsed = new URL(url)
+    return `${parsed.pathname}${parsed.search}`
+  } catch {
+    return url
+  }
+}

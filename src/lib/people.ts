@@ -20,8 +20,14 @@ import type { Person, Taxonomy } from '@/payload-types'
  *      whether or not somebody clicked publish.
  */
 
-/** Completeness below this is rendered but marked noindex. */
-export const INDEX_THRESHOLD = 60
+/**
+ * Indexing threshold.
+ *
+ * Set to 0 on the client's instruction: every published profile is offered to
+ * search, regardless of how little is known about it. The mechanism is kept
+ * rather than deleted so a bar can be reinstated by changing this one number.
+ */
+export const INDEX_THRESHOLD = 0
 
 const published: Where = { status: { equals: 'published' } }
 
@@ -100,10 +106,10 @@ export function personTerms(person: Person) {
   }
 }
 
-/** Landing-page URL for a term, e.g. /people/countries/canada. */
+/** Landing-page URL for a term, e.g. /influencers/countries/canada. */
 export function termHref(term: Taxonomy): string {
   const segment = TAXONOMY_SEGMENTS[term.type as TaxonomyType] ?? 'topics'
-  return `/people/${segment}/${term.slug}`
+  return `/influencers/${segment}/${term.slug}`
 }
 
 export const PERSON_TYPE_LABELS: Record<string, string> = {
@@ -212,8 +218,8 @@ const termParamsUnguarded = cache(async (minimum = 3): Promise<{ segment: string
     .filter((d) => Boolean(d.segment) && Boolean(d.slug))
 })
 
-/** A term page is worth indexing once it lists a useful number of people. */
-export const isTermIndexable = (term: Taxonomy): boolean => (term.personCount ?? 0) >= 5
+/** Every term holding at least one profile is indexable. */
+export const isTermIndexable = (term: Taxonomy): boolean => (term.personCount ?? 0) >= 1
 
 /** Human label for a term type, used in headings. */
 export const TYPE_NOUNS: Record<TaxonomyType, string> = {
@@ -265,19 +271,22 @@ const searchPeopleUnguarded = cache(async (query: PeopleQuery) => {
   const conditions: Where[] = [published]
 
   const term = query.q?.trim()
+
+  // Ranked candidates come from a trigram query, because Payload's builder can
+  // sort but cannot rank. The ids are then fed back through the normal query so
+  // every other filter, and access control, still apply.
+  let ranked: number[] | null = null
   if (term) {
-    conditions.push({
-      or: [
-        { name: { like: term } },
-        { alternateNames: { like: term } },
-        { usernamePrimary: { like: term } },
-        { bioShort: { like: term } },
-      ],
-    })
+    ranked = await rankedCandidates(payload, term)
+    if (ranked.length === 0) return emptyPage<Person>()
+    conditions.push({ id: { in: ranked } })
   }
 
   if (query.letter) {
-    conditions.push({ name: { like: `${query.letter}%` } })
+    // Not `name: { like: 'A%' }` — Payload rewrites that to ILIKE '%A%%',
+    // which returns every name containing an A. The denormalised initial gives
+    // a real prefix match that also paginates correctly.
+    conditions.push({ nameInitial: { equals: query.letter } })
   }
 
   if (query.type) {
@@ -307,19 +316,120 @@ const searchPeopleUnguarded = cache(async (query: PeopleQuery) => {
     }
   }
 
-  return payload.find({
+  const page = query.page && query.page > 0 ? query.page : 1
+
+  if (!ranked) {
+    return payload.find({
+      collection: 'people',
+      where: { and: conditions },
+      limit: 24,
+      page,
+      depth: 1,
+      sort: query.letter ? 'name' : '-completeness',
+    })
+  }
+
+  // With a search term, ordering is by relevance, which the database cannot do
+  // for us here. The directory is small enough (721 profiles, candidates capped
+  // at 500) that sorting the filtered set in memory is honest and fast.
+  const all = await payload.find({
     collection: 'people',
     where: { and: conditions },
-    limit: 24,
-    page: query.page && query.page > 0 ? query.page : 1,
+    limit: 500,
     depth: 1,
-    sort: term || query.letter ? 'name' : '-completeness',
+    pagination: false,
   })
+
+  const order = new Map(ranked.map((id, i) => [id, i]))
+  const sorted = [...all.docs].sort(
+    (a, b) => (order.get(a.id as number) ?? 1e9) - (order.get(b.id as number) ?? 1e9),
+  )
+
+  const limit = 24
+  const totalPages = Math.max(1, Math.ceil(sorted.length / limit))
+  return {
+    ...emptyPage<Person>(),
+    docs: sorted.slice((page - 1) * limit, page * limit),
+    totalDocs: sorted.length,
+    limit,
+    totalPages,
+    page,
+    hasPrevPage: page > 1,
+    hasNextPage: page < totalPages,
+    prevPage: page > 1 ? page - 1 : null,
+    nextPage: page < totalPages ? page + 1 : null,
+  }
 })
+
+/**
+ * Trigram-ranked ids for a search term, best match first.
+ *
+ * Catches near-misses an ILIKE cannot: "cristano" still finds "Cristiano
+ * Ronaldo". Falls back to substring matching if pg_trgm is unavailable, so a
+ * database without the migration applied degrades rather than breaking.
+ */
+async function rankedCandidates(
+  payload: Awaited<ReturnType<typeof getPayloadClient>>,
+  term: string,
+): Promise<number[]> {
+  const like = `%${term}%`
+  try {
+    const { rows } = await (payload.db as unknown as {
+      pool: { query: (t: string, v: unknown[]) => Promise<{ rows: { id: number }[] }> }
+    }).pool.query(
+      // word_similarity, not similarity: plain trigram similarity divides by the
+      // length of the whole string, so searching "ronaldo" ranked "Ronaldinho"
+      // above "Cristiano Ronaldo". word_similarity scores the best matching
+      // extent instead, which is what a name search actually wants.
+      `SELECT id,
+              GREATEST(
+                word_similarity($1, name),
+                COALESCE(word_similarity($1, alternate_names), 0),
+                COALESCE(word_similarity($1, username_primary), 0)
+              ) AS rank
+         FROM people
+        WHERE status = 'published'
+          AND (
+                name ILIKE $2
+             OR alternate_names ILIKE $2
+             OR username_primary ILIKE $2
+             OR bio_short ILIKE $2
+             OR word_similarity($1, name) > 0.5
+          )
+        ORDER BY rank DESC, completeness DESC NULLS LAST
+        LIMIT 500`,
+      [term, like],
+    )
+    return rows.map((r) => r.id)
+  } catch (error) {
+    console.warn('[search] trigram ranking unavailable, falling back to substring match.', error)
+    const fallback = await payload.find({
+      collection: 'people',
+      where: {
+        and: [
+          published,
+          {
+            or: [
+              { name: { like: term } },
+              { alternateNames: { like: term } },
+              { usernamePrimary: { like: term } },
+              { bioShort: { like: term } },
+            ],
+          },
+        ],
+      },
+      limit: 500,
+      depth: 0,
+      pagination: false,
+    })
+    return fallback.docs.map((d) => d.id as number)
+  }
+}
 
 /** Options for the filter dropdowns, only terms that would return results. */
 export const filterOptions = cache(async () => {
-  const groups = await Promise.all(FILTERS.map((f) => getTerms(f.type, 2)))
+  // Every term with at least one published profile, so the dropdowns are complete.
+  const groups = await Promise.all(FILTERS.map((f) => getTerms(f.type, 1)))
   return FILTERS.map((filter, i) => ({ ...filter, options: groups[i] }))
 })
 
@@ -329,7 +439,7 @@ export const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
 //
 // These queries previously bypassed the `safeRead` wrapper that the marketing
 // routes use. The asymmetry showed up badly in a real build: marketing pages
-// degraded to offline fallbacks while /people and /people/countries/israel
+// degraded to offline fallbacks while /people and /influencers/countries/israel
 // threw and killed the whole deploy.
 //
 // Now every directory query behaves the same way. During `next build` a failed
@@ -358,7 +468,13 @@ export const getPeople = (options: { limit?: number; page?: number } = {}) =>
 export const peopleParams = () =>
   safeRead('people (static params)', () => peopleParamsUnguarded(), [] as { slug: string }[])
 
-export const getTerms = (type: TaxonomyType, minimum = 5) =>
+/**
+ * Default minimum is 1 so every country, industry and language that holds a
+ * profile appears in the filters and gets a page. The sitemap still asks for 5
+ * explicitly, and `isTermIndexable` keeps thin terms out of the index — so the
+ * pages exist and are browsable without offering one-person pages to crawlers.
+ */
+export const getTerms = (type: TaxonomyType, minimum = 1) =>
   safeRead('taxonomies', () => getTermsUnguarded(type, minimum), [] as Taxonomy[])
 
 export const getTerm = (segment: string, slug: string) =>
@@ -367,7 +483,7 @@ export const getTerm = (segment: string, slug: string) =>
 export const getPeopleByTerm = (term: Taxonomy, options: { limit?: number; page?: number } = {}) =>
   safeRead('people', () => getPeopleByTermUnguarded(term, options), emptyPage<Person>())
 
-export const termParams = (minimum = 3) =>
+export const termParams = (minimum = 1) =>
   safeRead('taxonomies (static params)', () => termParamsUnguarded(minimum), [] as { segment: string; slug: string }[])
 
 export const searchPeople = (query: PeopleQuery) =>

@@ -268,7 +268,39 @@ files.forEach((file, index) => {
 
   const raw = readFileSync(join(inDir, file), 'utf8')
   const { blocks, headings } = parse(raw)
-  const body = blocks.filter((b) => !(b.type === 'h2' && b.text === meta.title))
+  // Editorial briefs are appended to the end of most exports: "Meta Title:",
+  // "Meta Description:", "Suggested Schema Markup:", "Suggested Internal
+  // Links:". That is scaffolding, not article copy, and 20 of 23 files carried
+  // it straight into the body on the first pass.
+  //
+  // The meta values inside it are hand-written, so they are lifted out and used
+  // instead of the truncated ones derived from the lead paragraph.
+  const SCAFFOLD = /^(Meta Title|Meta Description|Suggested Schema|Suggested Internal|Primary Keyword|Secondary Keyword|Target Keyword|Word Count|Deliverables?:)/i
+
+  const all = blocks.filter((b) => !(b.type === 'h2' && b.text === meta.title))
+  // "Call to Action", "Primary Call to Action", "Internal Linking" and friends
+  // are also brief labels, but unlike the meta block they can appear as
+  // legitimate headings mid-article — a CRO guide discusses CTAs. So they only
+  // count as scaffolding in the last fifth of the document, where the brief
+  // always sits.
+  const TAIL_SCAFFOLD =
+    /^((Primary |Secondary |Suggested )?Call[- ]to[- ]Action|CTA|Internal Link(ing|s)|Schema Markup|FAQ Schema|Suggested FAQ|Keyword|Tone|Audience|Notes?|Summary,? (and )?FAQ.*)$/i
+  const tailStart = Math.floor(all.length * 0.7)
+
+  const cutAt = all.findIndex(
+    (b, i) =>
+      b.type !== 'ul' &&
+      (SCAFFOLD.test(b.text.trim()) || (i >= tailStart && TAIL_SCAFFOLD.test(b.text.trim()))),
+  )
+  const tail = cutAt === -1 ? '' : all.slice(cutAt).map((b) => (b.type === 'ul' ? b.items.join(' ') : b.text)).join(' ')
+  const body = cutAt === -1 ? all : all.slice(0, cutAt)
+
+  const pick = (label: string) => {
+    const m = tail.match(new RegExp(`${label}:\\s*(.+?)(?=\\s*(?:Meta Title|Meta Description|Suggested|Primary Keyword|Secondary Keyword|Target Keyword|Word Count)\\s*:|$)`, 'i'))
+    return m ? m[1].trim().replace(/\s+/g, ' ') : ''
+  }
+  const briefTitle = pick('Meta Title')
+  const briefDescription = pick('Meta Description')
   const paragraphs = body.filter((b) => b.type === 'p') as { type: 'p'; text: string }[]
   const words = paragraphs.reduce((n, b) => n + b.text.split(/\s+/).length, 0)
 
@@ -287,8 +319,8 @@ files.forEach((file, index) => {
 const article: ArticleSeed = {
   slug: '${meta.slug}',
   title: '${esc(meta.title)}',
-  metaTitle: '${esc(sentence(meta.title, 60))}',
-  metaDescription: '${esc(sentence(lead, 155))}',
+  metaTitle: '${esc(sentence(briefTitle || meta.title, 60))}',
+  metaDescription: '${esc(sentence(briefDescription || lead, 158))}',
   excerpt: '${esc(sentence(lead, 220))}',
   category: '${meta.category}',
   publishedAt: '${date}',

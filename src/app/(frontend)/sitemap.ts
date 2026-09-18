@@ -8,8 +8,16 @@ import { absoluteUrl } from '@/lib/utils'
 
 export const revalidate = 3600
 
+/**
+ * Defensive: any character outside the slug alphabet would break the XML, so
+ * it is stripped here as well as at import. A sitemap that fails to parse takes
+ * every URL in it down, not just the malformed one.
+ */
+const safeSlug = (value: string) =>
+  value.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '')
+
 const termHrefFor = (term: Taxonomy) =>
-  `/people/${TAXONOMY_SEGMENTS[term.type as TaxonomyType] ?? 'topics'}/${term.slug}`
+  `/influencers/${TAXONOMY_SEGMENTS[term.type as TaxonomyType] ?? 'topics'}/${safeSlug(term.slug)}`
 
 const STATIC_ROUTES: { path: string; priority: number; changeFrequency: MetadataRoute.Sitemap[number]['changeFrequency'] }[] = [
   { path: '/', priority: 1, changeFrequency: 'weekly' },
@@ -17,7 +25,7 @@ const STATIC_ROUTES: { path: string; priority: number; changeFrequency: Metadata
   { path: '/industries', priority: 0.9, changeFrequency: 'monthly' },
   { path: '/work', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/growth-hub', priority: 0.8, changeFrequency: 'weekly' },
-  { path: '/people', priority: 0.9, changeFrequency: 'daily' },
+  { path: '/influencers', priority: 0.9, changeFrequency: 'daily' },
   { path: '/tools', priority: 0.8, changeFrequency: 'monthly' },
   { path: '/about', priority: 0.7, changeFrequency: 'yearly' },
   { path: '/process', priority: 0.7, changeFrequency: 'yearly' },
@@ -113,14 +121,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     for (const person of published.docs) {
       if (person.seo?.noIndex || !isIndexable(person)) continue
       entries.push({
-        url: absoluteUrl(`/people/${person.slug}`),
+        url: absoluteUrl(`/influencers/${person.slug}`),
         lastModified: new Date(person.updatedAt),
         changeFrequency: 'monthly',
         priority: 0.6,
       })
     }
 
-    const groups = await Promise.all(TAXONOMY_TYPES.map((type) => getTerms(type, 5)))
+    const groups = await Promise.all(TAXONOMY_TYPES.map((type) => getTerms(type, 1)))
     for (const term of groups.flat()) {
       if (!isTermIndexable(term)) continue
       entries.push({

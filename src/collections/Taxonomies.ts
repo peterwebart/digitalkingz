@@ -8,7 +8,7 @@ import { anyone, authenticated } from '@/access'
  * profession, language and audience. Modelling each as its own collection would
  * mean eight near-identical schemas and eight near-identical landing-page
  * routes. One collection with a `type` discriminator gives the same URLs
- * (/people/countries/canada, /people/industries/fitness) from a single route
+ * (/influencers/countries/canada, /influencers/industries/fitness) from a single route
  * and a single admin screen.
  *
  * Slugs are unique per type, not globally: "football" is legitimately both a
@@ -30,7 +30,7 @@ export const TAXONOMY_TYPES = [
 
 export type TaxonomyType = (typeof TAXONOMY_TYPES)[number]
 
-/** Plural URL segment for each type, e.g. /people/countries/canada. */
+/** Plural URL segment for each type, e.g. /influencers/countries/canada. */
 export const TAXONOMY_SEGMENTS: Record<TaxonomyType, string> = {
   'person-type': 'types',
   country: 'countries',

@@ -5,6 +5,11 @@ import {
 import type { SerializedEditorState } from '@payloadcms/richtext-lexical/lexical'
 import { Lightbulb } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { createHeadingIds } from '@/lib/toc'
+
+type TextNode = { text?: string; children?: unknown[] }
+const extractText = (node: TextNode): string =>
+  node.text ?? ((node.children ?? []) as TextNode[]).map(extractText).join('')
 
 type CalloutFields = { blockType: 'callout'; title?: string; text?: string }
 type DataTableFields = { blockType: 'dataTable'; caption?: string; content?: string }
@@ -67,7 +72,34 @@ function DataTable({ caption, content }: { caption?: string; content?: string })
 type BlockNodeArg<T> = { node: { fields: T } }
 
 const converters: JSXConvertersFunction = ({ defaultConverters }) => ({
+
   ...defaultConverters,
+  // Ids must match src/lib/toc.ts exactly, so both use the same generator and
+  // walk the document in the same order.
+  heading: (() => {
+    const nextId = createHeadingIds()
+    // Payload types the converter tightly; the node shape we need (tag plus
+    // children) is a subset, so it is narrowed rather than re-declared.
+    const HeadingNode = ({
+      node,
+      nodesToJSX,
+    }: {
+      node: { tag: string; children?: unknown[] }
+      nodesToJSX: (a: { nodes: never[] }) => React.ReactNode
+    }) => {
+      const children = nodesToJSX({ nodes: (node.children ?? []) as never[] })
+      const text = extractText(node as TextNode)
+      const Tag = (node.tag ?? 'h2') as 'h1' | 'h2' | 'h3' | 'h4'
+      const id = Tag === 'h2' || Tag === 'h3' ? nextId(text) : undefined
+      return (
+        <Tag id={id} className={id ? 'scroll-mt-28' : undefined}>
+          {children}
+        </Tag>
+      )
+    }
+    HeadingNode.displayName = 'HeadingNode'
+    return HeadingNode
+  })(),
   blocks: {
     callout: ({ node }: BlockNodeArg<CalloutFields>) => (
       <Callout title={node.fields.title} text={node.fields.text} />

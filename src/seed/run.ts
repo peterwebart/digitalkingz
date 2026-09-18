@@ -334,12 +334,31 @@ async function seed() {
 
   // --- Articles -----------------------------------------------------------
   // Longest phrases first so "Local SEO" wins over "SEO".
-  const linkTargets = [...services]
-    .sort((a, b) => b.title.length - a.title.length)
-    .map((s) => ({ phrase: s.title, href: `/services/${s.slug}` }))
+  // Link targets cover services AND every other article, which is what turns 29
+  // separate guides into a cluster: a mention of "The Complete SEO Guide" or
+  // "Local SEO" inside any article becomes a link. Longest phrases first so
+  // "The Complete Local SEO Guide" wins over "Local SEO", and "Local SEO" wins
+  // over "SEO".
+  const articleTargets = articles.map((a) => ({
+    phrase: a.title,
+    href: `/growth-hub/${a.slug}`,
+    slug: a.slug,
+  }))
+
+  const serviceTargets = services.map((s) => ({
+    phrase: s.title,
+    href: `/services/${s.slug}`,
+    slug: '',
+  }))
+
+  const linkTargets = [...serviceTargets, ...articleTargets].sort(
+    (a, b) => b.phrase.length - a.phrase.length,
+  )
 
   for (const [i, a] of articles.entries()) {
-    const linked = autolink(a.body, linkTargets, 5)
+    // Never let an article link to itself.
+    const targets = linkTargets.filter((t) => t.slug !== a.slug)
+    const linked = autolink(a.body, targets, 8)
     await upsert(payload, 'posts', a.slug, {
       slug: a.slug,
       title: a.title,

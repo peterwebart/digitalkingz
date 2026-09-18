@@ -153,11 +153,20 @@ export const COMPANY_LINKS: NavItem[] = [
 
 export const RESOURCE_LINKS: NavItem[] = [
   {
-    label: 'Growth Hub',
+    label: 'Guides',
     href: '/growth-hub',
-    description: 'Long-form analysis on growth systems',
+    description: 'In-depth guides on SEO, PPC, websites, AI search and growth',
   },
-  { label: 'Guides', href: '/growth-hub', description: 'Deep dives on SEO, AI and conversion' },
+  {
+    label: 'Free Tools',
+    href: '/tools',
+    description: '20 calculators for budgets, ROI, CAC and AI visibility',
+  },
+  {
+    label: 'Influencer Directory',
+    href: '/influencers',
+    description: 'Influencers and public figures by country, industry and platform',
+  },
   { label: 'Case Studies', href: '/work', description: 'How the work is engineered' },
   { label: 'FAQs', href: '/services#faq', description: 'The questions we get asked first' },
 ]
