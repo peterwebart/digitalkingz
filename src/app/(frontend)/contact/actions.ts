@@ -46,9 +46,19 @@ const label = (
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-function renderEmail(data: LeadInput, score: number): string {
+/**
+ * Human-readable reference, derived from the lead id rather than stored, so no
+ * new column is needed. Shown to the enquirer and used as the email subject
+ * tag so a reply threads against something both sides can quote.
+ */
+function leadReference(id: number | string): string {
+  const n = typeof id === 'number' ? id : Number(String(id).replace(/\D/g, '')) || 0
+  return `DK-${new Date().getFullYear()}-${String(n).padStart(6, '0')}`
+}
+
+function renderEmail(data: LeadInput, reference: string): string {
   const rows: [string, string][] = [
-    ['Score', `${score} / 100`],
+    ['Reference', reference],
     ['Name', data.name],
     ['Email', data.email],
     ['Phone', data.phone || 'Not provided'],
@@ -159,7 +169,8 @@ export async function submitLead(
 
   const data = parsed.data
 
-  // Honeypot: respond as if successful so a bot learns nothing.
+  // Honeypot: respond as if successful so a bot learns nothing. No reference,
+  // because no lead was created.
   if (data.botField) {
     return { status: 'success', message: 'Thank you. We will be in touch shortly.' }
   }
@@ -234,6 +245,8 @@ export async function submitLead(
     }
   }
 
+  const reference = leadId !== null ? leadReference(leadId) : 'DK-PENDING'
+
   // 2. Notify by email.
   let notificationSent = false
   const resendKey = env('RESEND_API_KEY')
@@ -272,8 +285,10 @@ export async function submitLead(
         from: from as string,
         to,
         replyTo: data.email,
-        subject: `New enquiry (${score}/100) - ${data.company}`,
-        html: renderEmail(data, score),
+        // No score in the subject: replyTo is the enquirer, so anything here
+        // comes back to them quoted the moment someone hits Reply.
+        subject: `New enquiry from ${data.name} - ${data.company} [${reference}]`,
+        html: renderEmail(data, reference),
       })
       if (result.error) {
         const { name, message } = result.error

@@ -82,6 +82,8 @@ export type LeadFormState = {
    * the fields to repopulate. Never includes the honeypot.
    */
   values?: Partial<Record<string, string | string[]>>
+  /** Human-readable enquiry reference, e.g. DK-2026-000123. */
+  reference?: string
   /** Increments per failed attempt so the fields remount with fresh defaults. */
   attempt?: number
 }

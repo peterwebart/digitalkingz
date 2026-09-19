@@ -3,6 +3,7 @@ import { GeistMono } from 'geist/font/mono'
 import { GeistSans } from 'geist/font/sans'
 import { Footer } from '@/components/layout/Footer'
 import { Header } from '@/components/layout/Header'
+import { GoogleTagManagerNoScript, GoogleTagManagerScript } from '@/components/GoogleTagManager'
 import { JsonLd } from '@/components/JsonLd'
 import { getSiteNav } from '@/lib/nav'
 import { getSiteSettings } from '@/lib/payload'
@@ -46,9 +47,13 @@ export const viewport: Viewport = {
 export default async function FrontendLayout({ children }: { children: React.ReactNode }) {
   const [nav, settings] = await Promise.all([getSiteNav(), getSiteSettings()])
 
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || undefined
+
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
       <body className="min-h-dvh antialiased">
+        {gtmId ? <GoogleTagManagerNoScript id={gtmId} /> : null}
+        {gtmId ? <GoogleTagManagerScript id={gtmId} /> : null}
         <JsonLd nodes={[organizationSchema(settings), websiteSchema(settings)]} />
         <Header nav={nav} bookingUrl={settings.bookingUrl} />
         <main id="main" className="pt-16 lg:pt-[4.5rem]">

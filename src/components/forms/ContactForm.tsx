@@ -45,7 +45,27 @@ export function ContactForm() {
 
   useEffect(() => {
     if (state.status !== 'idle') statusRef.current?.focus()
-    if (state.status === 'success') formRef.current?.reset()
+    if (state.status === 'success') {
+      formRef.current?.reset()
+
+      // The conversion is pushed here, before navigating, so it is recorded
+      // even if the visitor closes the tab mid-transition. A thank-you pageview
+      // alone would lose those.
+      const w = window as typeof window & { dataLayer?: Record<string, unknown>[] }
+      w.dataLayer = w.dataLayer ?? []
+      w.dataLayer.push({
+        event: 'generate_lead',
+        form_name: 'contact',
+        enquiry_reference: state.reference ?? null,
+      })
+
+      const query = state.reference ? `?ref=${encodeURIComponent(state.reference)}` : ''
+      // A real document load, not router.push. GTM's Page View trigger fires on
+      // container load only, so a History API change produces no pageview and
+      // no Page URL to key a conversion on. The extra request costs a fraction
+      // of a second on the one navigation where measurement matters most.
+      window.location.assign(`/thank-you${query}`)
+    }
   }, [state])
 
   if (state.status === 'success') {
