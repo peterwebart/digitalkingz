@@ -47,7 +47,11 @@ export const viewport: Viewport = {
 export default async function FrontendLayout({ children }: { children: React.ReactNode }) {
   const [nav, settings] = await Promise.all([getSiteNav(), getSiteSettings()])
 
-  const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || undefined
+  // The container id defaults to the live container rather than requiring an
+  // env var. It is public either way, and making it configuration meant GTM
+  // silently rendered nothing whenever the build variable was missing.
+  // NEXT_PUBLIC_GTM_ID still overrides it for a staging container.
+  const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim() || 'GTM-5XNGLR2M'
 
   return (
     <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`} suppressHydrationWarning>
