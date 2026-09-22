@@ -1,5 +1,10 @@
+import path from 'path'
+import { fileURLToPath } from 'url'
 import type { CollectionConfig } from 'payload'
 import { anyone, authenticated } from '@/access'
+
+const filename = fileURLToPath(import.meta.url)
+const dirname = path.dirname(filename)
 
 export const Media: CollectionConfig = {
   slug: 'media',
@@ -15,7 +20,14 @@ export const Media: CollectionConfig = {
     delete: authenticated,
   },
   upload: {
-    staticDir: 'public/media',
+    // Absolute, resolved from this file's location — the same pattern
+    // payload.config.ts uses for migrationDir.
+    //
+    // A relative 'public/media' is resolved against different roots on write
+    // and on read once the app is compiled and running from a container. The
+    // seed wrote correctly to /app/public/media while every read 404'd, with
+    // the files plainly on disk.
+    staticDir: path.resolve(dirname, '../../public/media'),
     mimeTypes: ['image/*'],
     formatOptions: {
       format: 'webp',

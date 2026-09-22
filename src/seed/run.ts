@@ -314,9 +314,16 @@ async function seed() {
       console.warn(`  ! hero image missing, skipped: ${a.heroImage}`)
       continue
     }
+    // Match on the filename Payload will actually store, not the source name.
+    // The Media collection converts uploads to webp, so a lookup for
+    // "guide.jpg" never matches the stored "guide.webp" — every seed run then
+    // created a duplicate record, and Payload suffixed the file on disk
+    // (-1, -2) while the first record kept claiming the unsuffixed name.
+    // Articles pointed at that first record, so every image 404'd.
+    const storedName = a.heroImage.replace(/\.[^.]+$/, '.webp')
     const found = await payload.find({
       collection: 'media',
-      where: { filename: { equals: a.heroImage } },
+      where: { filename: { equals: storedName } },
       limit: 1,
     })
     if (found.docs[0]) {
