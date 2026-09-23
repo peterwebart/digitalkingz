@@ -1,10 +1,6 @@
 import path from 'path'
-import { fileURLToPath } from 'url'
 import type { CollectionConfig } from 'payload'
 import { anyone, authenticated } from '@/access'
-
-const filename = fileURLToPath(import.meta.url)
-const dirname = path.dirname(filename)
 
 export const Media: CollectionConfig = {
   slug: 'media',
@@ -20,14 +16,14 @@ export const Media: CollectionConfig = {
     delete: authenticated,
   },
   upload: {
-    // Absolute, resolved from this file's location — the same pattern
-    // payload.config.ts uses for migrationDir.
+    // Resolved from process.cwd() at runtime — the directory the server
+    // actually starts in (/app in production).
     //
-    // A relative 'public/media' is resolved against different roots on write
-    // and on read once the app is compiled and running from a container. The
-    // seed wrote correctly to /app/public/media while every read 404'd, with
-    // the files plainly on disk.
-    staticDir: path.resolve(dirname, '../../public/media'),
+    // Not import.meta.url: webpack bakes that in at BUILD time as the source
+    // file's absolute path, so staticDir pointed wherever the image was built
+    // rather than where it runs. Locally those are the same directory, which
+    // is why this passed every local test and still 404'd in production.
+    staticDir: path.resolve(process.cwd(), 'public/media'),
     mimeTypes: ['image/*'],
     formatOptions: {
       format: 'webp',
