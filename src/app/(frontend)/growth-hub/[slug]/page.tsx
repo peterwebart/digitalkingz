@@ -146,18 +146,21 @@ export default async function ArticlePage({ params }: Params) {
 
               {hero ? (
                 <figure className="flex flex-col gap-2">
-                  <div className="relative aspect-[16/10] overflow-hidden rounded-xl border border-ink-100/10 bg-ink-900">
-                    <Image
-                      src={mediaSrc(hero.url as string)}
-                      alt={hero.alt ?? post.title}
-                      fill
-                      // Reserves the box before the file arrives, so the hero
-                      // cannot shift the headline down as it loads.
-                      sizes="(max-width: 768px) 100vw, 760px"
-                      priority
-                      className="object-cover"
-                    />
-                  </div>
+                  {/* Natural aspect ratio, never cropped. These are portrait
+                      infographics (roughly 2:3); forcing them into a landscape
+                      box with object-cover cut off most of the image, and an
+                      infographic with its bottom half missing is useless.
+                      width/height come from the media record, so the space is
+                      still reserved before the file loads — no layout shift. */}
+                  <Image
+                    src={mediaSrc(hero.url as string)}
+                    alt={hero.alt ?? post.title}
+                    width={hero.width ?? 1200}
+                    height={hero.height ?? 1800}
+                    sizes="(max-width: 768px) 100vw, 760px"
+                    priority
+                    className="h-auto w-full rounded-xl border border-ink-100/10 bg-ink-900"
+                  />
                   {hero.caption ? (
                     <figcaption className="text-xs leading-relaxed text-ink-600">
                       {hero.caption}

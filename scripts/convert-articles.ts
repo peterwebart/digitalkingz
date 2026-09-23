@@ -98,19 +98,40 @@ const PAGE_ARTIFACT = /^(page\s+)?\d+(\s*\/\s*\d+)?$/i
  * shorter than the body's wrap width. Without the width test the converter
  * reported 652 headings in a single article.
  */
-function isHeading(line: string, prevBlank: boolean, next: string, wrapWidth: number): boolean {
-  const t = line.trim()
-  if (t.length < 4 || t.length > 90) return false
-  if (BULLET.test(t)) return false
-  if (/[.,;:]$/.test(t)) return false
-  if (!/^[A-Z0-9]/.test(t)) return false
-  if (t.split(/\s+/).length > 14) return false
-  // Prose that happens to lack a full stop usually continues on the next line.
-  if (next && /^[a-z]/.test(next.trim())) return false
-  // Must stand alone.
-  if (!prevBlank) return false
-  const nextBlank = next.trim().length === 0
-  return nextBlank || t.length < wrapWidth * 0.6
+/** Nearest non-blank line in a direction, or '' at the edge of the document. */
+function neighbour(lines: string[], i: number, step: 1 | -1): string {
+  for (let j = i + step; j >= 0 && j < lines.length; j += step) {
+    const t = lines[j].trim()
+    if (t) return t
+  }
+  return ''
+}
+
+const isQuestion = (t: string) => t.length >= 8 && t.length <= 140 && t.endsWith('?')
+
+/**
+ * Whether a line is an editorial section heading.
+ *
+ * Independent of capitalisation, because the sources disagree: the CRO guide
+ * title-cases its questions, the Local SEO guide does not. A rule keyed on
+ * case fixed one and left the other with three headings in 6,000 words.
+ *
+ * What does hold across every source is how questions are used:
+ *   - a section heading is a question standing on its own, answered by prose
+ *   - a checklist or procurement list is several questions in a row
+ *
+ * So a question is a heading only when neither neighbour is also a question.
+ * Runs of questions fall through to prose and are collected as list items.
+ */
+function isHeading(lines: string[], i: number): boolean {
+  const t = lines[i].trim()
+  if (!isQuestion(t) || BULLET.test(t)) return false
+  const prev = neighbour(lines, i, -1)
+  const next = neighbour(lines, i, 1)
+  if (isQuestion(prev) || isQuestion(next)) return false
+  // Must be answered by something — a question with nothing after it is not
+  // introducing a section.
+  return next.length > 0
 }
 
 function parse(raw: string): { blocks: Block[]; headings: number } {
@@ -186,7 +207,17 @@ function parse(raw: string): { blocks: Block[]; headings: number } {
     }
 
     const prevBlank = lineMode || i === 0 || (lines[i - 1] ?? '').trim().length === 0
-    if (isHeading(t, prevBlank, lines[i + 1] ?? '', wrapWidth)) {
+    // A question that is not a heading is part of a run — a checklist or a
+    // procurement list. Collect it as a list item rather than letting it merge
+    // into a paragraph of questions strung together.
+    if (isQuestion(t) && !isHeading(lines, i)) {
+      flushPara()
+      bullets.push(t)
+      lastWasHeading = false
+      continue
+    }
+
+    if (isHeading(lines, i)) {
       flushPara()
       flushBullets()
       // A heading immediately after another heading is a subheading.
