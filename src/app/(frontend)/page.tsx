@@ -213,6 +213,7 @@ export default async function HomePage() {
                 <Reveal key={post.id} delay={i * 60}>
                   <ArticleCard
                     href={`/growth-hub/${post.slug}`}
+                    image={post.heroImage}
                     title={post.title}
                     excerpt={post.excerpt}
                     category={typeof post.category === 'object' ? post.category?.title : undefined}

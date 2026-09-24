@@ -254,6 +254,7 @@ export default async function ArticlePage({ params }: Params) {
                 <Reveal key={item.id} delay={i * 60}>
                   <ArticleCard
                     href={`/growth-hub/${item.slug}`}
+                    image={item.heroImage}
                     title={item.title}
                     excerpt={item.excerpt}
                     category={typeof item.category === 'object' ? item.category?.title : undefined}

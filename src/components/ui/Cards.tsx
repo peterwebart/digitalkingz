@@ -1,3 +1,5 @@
+import Image from 'next/image'
+import { mediaSrc } from '@/lib/utils'
 import Link from 'next/link'
 import { ArrowUpRight } from 'lucide-react'
 import { Icon } from '@/components/ui/Icon'
@@ -89,6 +91,7 @@ export function ArticleCard({
   readingMinutes,
   featured = false,
   compact = false,
+  image,
 }: {
   href: string
   title: string
@@ -98,7 +101,10 @@ export function ArticleCard({
   readingMinutes?: number | null
   featured?: boolean
   compact?: boolean
+  /** The article's hero image, if it has one. */
+  image?: { url?: string | null; alt?: string | null } | number | null
 }) {
+  const thumb = typeof image === 'object' && image?.url ? image : null
   return (
     <article
       className={cn(
@@ -113,10 +119,23 @@ export function ArticleCard({
             featured ? 'aspect-[2/1] md:aspect-[16/7]' : compact ? 'aspect-[16/9]' : 'aspect-[16/10]',
           )}
         >
-          <div
-            aria-hidden="true"
-            className="bg-grid absolute inset-0 opacity-50 transition-opacity duration-500 group-hover:opacity-80"
-          />
+          {thumb ? (
+            // Anchored to the top, where each infographic carries its title,
+            // so the thumbnail shows the recognisable part rather than a slice
+            // from the middle of a tall portrait image.
+            <Image
+              src={mediaSrc(thumb.url as string)}
+              alt={thumb.alt ?? ''}
+              fill
+              sizes="(max-width: 768px) 100vw, 33vw"
+              className="object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
+            />
+          ) : (
+            <div
+              aria-hidden="true"
+              className="bg-grid absolute inset-0 opacity-50 transition-opacity duration-500 group-hover:opacity-80"
+            />
+          )}
           <div
             aria-hidden="true"
             className="pointer-events-none absolute -right-20 -top-24 size-64 rounded-full bg-brand-600/10 blur-[80px] transition-all duration-700 group-hover:bg-brand-500/16"

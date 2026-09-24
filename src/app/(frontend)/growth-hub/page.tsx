@@ -103,6 +103,7 @@ export default async function InsightsPage({ searchParams }: Search) {
               <Reveal>
                 <ArticleCard
                   href={`/growth-hub/${lead.slug}`}
+                    image={lead.heroImage}
                   title={lead.title}
                   excerpt={lead.excerpt}
                   category={typeof lead.category === 'object' ? lead.category?.title : undefined}
@@ -119,6 +120,7 @@ export default async function InsightsPage({ searchParams }: Search) {
                   <Reveal key={post.id} delay={i * 50}>
                     <ArticleCard
                       href={`/growth-hub/${post.slug}`}
+                    image={post.heroImage}
                       title={post.title}
                       excerpt={post.excerpt}
                       category={

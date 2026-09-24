@@ -73,7 +73,11 @@ export function normaliseBlocks(blocks: ContentBlock[], title: string): ContentB
     if (block.type === 'h2' || block.type === 'h3') {
       const text = stripRunningHeader(block.text, title)
       if (!text) continue
-      block = { ...block, text }
+      // A real section heading never starts lowercase. "user's need?" is the
+      // second half of "Does the business match the user's need?", split by
+      // the export and promoted to an H2 only because it ended in "?". Demote
+      // it so the paragraph merge below rejoins the halves.
+      block = startsLower(text) ? { type: 'p', text } : { ...block, text }
     }
     if (block.type === 'ul' || block.type === 'ol') {
       const items = block.items.map((it) => stripRunningHeader(it, title)).filter(Boolean)
@@ -98,9 +102,103 @@ export function normaliseBlocks(blocks: ContentBlock[], title: string): ContentB
     out.push(block)
   }
 
-  return out.map((block) =>
+  const merged = out.map((block) =>
     block.type === 'ul' || block.type === 'ol'
       ? { ...block, items: mergeWrappedItems(block.items) }
       : block,
   )
+  return rebuildTables(splitGluedHeaderCells(merged))
+}
+
+// --- Flattened tables -------------------------------------------------------
+//
+// The export read tables column by column into one-cell-per-line prose:
+//
+//   Signal / What it means / Practical work / Relevance / Does the business
+//   match the user's need? / Accurate categories... / Distance / ...
+//
+// Once wrapped fragments are rejoined, a table shows up as a run of short
+// cells that are not sentences. The column count is recovered as the one that
+// makes the first column consistently short labels (Relevance, Distance,
+// Prominence). When no column count fits cleanly the run is left as prose —
+// a missed table reads as plain text; a wrongly built one scrambles the facts.
+
+/** A short block that reads as a table cell rather than a sentence. */
+const isCell = (b: ContentBlock) =>
+  b.type === 'p' && b.text.length <= 140 && !/[.]$/.test(b.text.trim())
+
+/** Short label, as the first column of a table typically is. */
+const isLabel = (t: string) => t.length <= 48 && !/[.;:,]$/.test(t.trim())
+
+/**
+ * The export often glued a table's first header cell onto the end of the
+ * paragraph before it: "...cannot reliably manipulate proximity. Signal".
+ * Split a short trailing tail off a sentence when a table follows.
+ */
+function splitGluedHeaderCells(blocks: ContentBlock[]): ContentBlock[] {
+  const out: ContentBlock[] = []
+  blocks.forEach((b, i) => {
+    const next = blocks[i + 1]
+    if (b.type === 'p' && next && isCell(next)) {
+      const m = b.text.match(/^(.*[.!?])\s+([A-Z][^.!?]{0,40})$/)
+      if (m && m[2].split(/\s+/).length <= 4) {
+        out.push({ ...b, text: m[1] })
+        out.push({ type: 'p', text: m[2] })
+        return
+      }
+    }
+    out.push(b)
+  })
+  return out
+}
+
+function chooseColumns(cells: string[]): number | null {
+  for (const k of [3, 2, 4, 5]) {
+    if (cells.length % k !== 0 || cells.length / k < 2) continue
+    const firstColumn = cells.filter((_, i) => i % k === 0)
+    const others = cells.filter((_, i) => i % k !== 0)
+    const labelled = firstColumn.every(isLabel)
+    // The first column should be noticeably terser than the rest.
+    const avg = (xs: string[]) => xs.reduce((n, x) => n + x.length, 0) / xs.length
+    if (labelled && avg(firstColumn) < avg(others)) return k
+  }
+  return null
+}
+
+const DIMENSION =
+  /^(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$/i
+
+function rebuildTables(blocks: ContentBlock[]): ContentBlock[] {
+  const out: ContentBlock[] = []
+  let i = 0
+  while (i < blocks.length) {
+    let j = i
+    while (j < blocks.length && isCell(blocks[j])) j += 1
+    const run = blocks.slice(i, j) as { type: 'p'; text: string }[]
+    const k = run.length >= 6 ? chooseColumns(run.map((c) => c.text)) : null
+    // Only build when the first header cell names a dimension ("Factor",
+    // "Area", "Signal"). That is the reliable tell of a comparison table read
+    // column by column. When it names a subject instead — "Traditional SEO" —
+    // the column count cannot be recovered reliably, and a sample showed those
+    // coming out scrambled, pairing facts with the wrong column. A table that
+    // is left flat reads as plain text; one that is built wrong misinforms.
+    const cells = run.map((c) => c.text.trim())
+    const headers = k ? cells.slice(0, k) : []
+    const rows: string[][] = []
+    if (k) for (let r = k; r < cells.length; r += k) rows.push(cells.slice(r, r + k))
+    // Reject two failure modes seen in review, rather than build them wrong:
+    //   - a split header: the first "row" is more column titles ("Strength |
+    //     Risk" under "Model | Best when") because the real table is wider
+    //   - a header cell repeated inside the data, meaning the grid is misread
+    const splitHeader = rows[0]?.every((c) => c.length <= 24 && !/[?]$/.test(c))
+    const headerRepeated = rows.some((r) => r.some((c) => headers.includes(c)))
+    if (k && DIMENSION.test(cells[0]) && !splitHeader && !headerRepeated) {
+      out.push({ type: 'table', headers, rows })
+      i = j
+    } else {
+      out.push(blocks[i])
+      i += 1
+    }
+  }
+  return out
 }
