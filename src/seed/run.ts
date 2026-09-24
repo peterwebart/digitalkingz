@@ -10,6 +10,7 @@
  * Requires DATABASE_URI and PAYLOAD_SECRET.
  */
 import 'dotenv/config'
+import { normaliseBlocks } from './normalise'
 import { getPayload } from 'payload'
 import type { Payload } from 'payload'
 import config from '@payload-config'
@@ -365,7 +366,10 @@ async function seed() {
   for (const [i, a] of articles.entries()) {
     // Never let an article link to itself.
     const targets = linkTargets.filter((t) => t.slug !== a.slug)
-    const linked = autolink(a.body, targets, 8)
+    // Repair PDF-export damage — wrapped sentences, split lists, running page
+    // headers — before linking, so links are placed in the corrected text.
+    const cleaned = normaliseBlocks(a.body, a.title)
+    const linked = autolink(cleaned, targets, 8)
     await upsert(payload, 'posts', a.slug, {
       slug: a.slug,
       title: a.title,
