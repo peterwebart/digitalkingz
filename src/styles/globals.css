@@ -506,4 +506,30 @@
     color: var(--color-ink-100);
     font-weight: 500;
   }
+
+  /* Bordered grid, so comparison tables read as tables. The previous style
+     drew only a hairline under the header row, which left the cells floating
+     and made a 3-column comparison look like loose text. Declared last so it
+     wins over the earlier table rules at equal specificity. */
+  & table {
+    border: 1px solid color-mix(in oklch, var(--color-ink-100) 18%, transparent);
+  }
+  & th,
+  & td {
+    border: 1px solid color-mix(in oklch, var(--color-ink-100) 14%, transparent);
+    padding: 0.75rem 1rem;
+    vertical-align: top;
+    text-align: start;
+  }
+  & thead th {
+    background: color-mix(in oklch, var(--color-ink-100) 7%, transparent);
+    color: var(--color-ink-100);
+    font-weight: 600;
+    font-size: 0.8125rem;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  & tbody tr:nth-child(even) td {
+    background: color-mix(in oklch, var(--color-ink-100) 3%, transparent);
+  }
 }

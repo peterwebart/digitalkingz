@@ -117,12 +117,19 @@ export function RichText({
   data: SerializedEditorState
   className?: string
 }) {
+  // The typography class lives on our own wrapper, not on PayloadRichText.
+  //
+  // PayloadRichText applies `className` to the container div it renders — and
+  // `disableContainer` removes that div. With both set, the class was silently
+  // discarded: prose-dk never reached the page, so headings rendered at body
+  // size, paragraphs had no spacing, lists had no bullets and tables no
+  // borders, even though every one of those rules was compiled and correct.
+  //
+  // Owning the wrapper also keeps the rendered nodes as its direct children,
+  // which the `.prose-dk > * + *` spacing rule depends on.
   return (
-    <PayloadRichText
-      data={data}
-      converters={converters}
-      className={cn('prose-dk', className)}
-      disableContainer
-    />
+    <div className={cn('prose-dk', className)}>
+      <PayloadRichText data={data} converters={converters} disableContainer />
+    </div>
   )
 }
