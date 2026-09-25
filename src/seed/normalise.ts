@@ -107,7 +107,77 @@ export function normaliseBlocks(blocks: ContentBlock[], title: string): ContentB
       ? { ...block, items: mergeWrappedItems(block.items) }
       : block,
   )
-  return rebuildTables(splitGluedHeaderCells(merged))
+  return rebuildTables(splitGluedHeaderCells(restoreLists(merged)))
+}
+
+// --- Lists flattened into paragraphs ---------------------------------------
+//
+// Two shapes, both seen on live pages:
+//
+//   numbered: "1. Buying software before... 2. Tracking every click but..."
+//             — sometimes continuing into the next paragraph ("9. ... 10. ...")
+//   bulleted: "Anomaly detection for spend... changes Narrative summaries that
+//             link... drivers Tagging and taxonomy..." — items joined with only
+//             a space, each starting with a capital
+//
+// Numbered lists are recovered from their markers, which are unambiguous.
+// Bulleted ones are recovered only from a paragraph with no sentence breaks at
+// all, split where a lowercase word runs straight into a capitalised one. A
+// paragraph that contains a full stop is prose and is never split — a proper
+// noun mid-sentence ("for Google Ads") must not become a list item.
+
+const NUMBERED = /(?:^|\s)(\d{1,2})\.\s+/g
+
+function numberedItems(text: string): { first: number; items: string[] } | null {
+  const marks = [...text.matchAll(NUMBERED)]
+  if (marks.length < 2) return null
+  const nums = marks.map((m) => Number(m[1]))
+  // Must be consecutive: 1,2,3 or 9,10 — not stray numbers in a sentence.
+  if (!nums.every((n, i) => i === 0 || n === nums[i - 1] + 1)) return null
+  if (text.slice(0, marks[0].index).trim()) return null
+  const items = marks.map((m, i) => {
+    const start = (m.index ?? 0) + m[0].length
+    const end = i + 1 < marks.length ? marks[i + 1].index : text.length
+    return text.slice(start, end).trim()
+  })
+  return items.every((it) => it.length > 2) ? { first: nums[0], items } : null
+}
+
+function bulletItems(text: string): string[] | null {
+  if (/[.!?]\s/.test(text)) return null // contains a sentence break: prose
+  // Formulas, arrows and quotations are prose, and a review found each one
+  // split wrongly: "ROI = (Revenue - Marketing Cost) / Marketing Cost x 100"
+  // broken at "Cost", a sentence with arrows broken at "Ads", quoted headings
+  // broken mid-quote.
+  if (/[÷×→=()"“”‘’#]/.test(text)) return null
+  // A comma leading into a clause ("…component, it is less…") marks a sentence
+  // that lost its full stop, not a list of noun phrases.
+  if (/,\s(it|they|this|these|which|we|you|he|she)\s/i.test(text)) return null
+  const parts = text.split(/(?<=[a-z0-9)])\s+(?=[A-Z][a-z])/)
+  if (parts.length < 3) return null
+  return parts.every((p) => p.split(/\s+/).length >= 3) ? parts.map((p) => p.trim()) : null
+}
+
+function restoreLists(blocks: ContentBlock[]): ContentBlock[] {
+  const out: ContentBlock[] = []
+  for (const b of blocks) {
+    if (b.type !== 'p') { out.push(b); continue }
+    const num = numberedItems(b.text)
+    if (num) {
+      const prev = out[out.length - 1]
+      // "9. ... 10. ..." continuing a list that stopped at 8.
+      if (prev?.type === 'ol' && num.first === prev.items.length + 1) {
+        out[out.length - 1] = { ...prev, items: [...prev.items, ...num.items] }
+      } else {
+        out.push({ type: 'ol', items: num.items })
+      }
+      continue
+    }
+    const bullets = bulletItems(b.text)
+    if (bullets) { out.push({ type: 'ul', items: bullets }); continue }
+    out.push(b)
+  }
+  return out
 }
 
 // --- Flattened tables -------------------------------------------------------
