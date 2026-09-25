@@ -602,7 +602,7 @@ function splitGluedHeaderCells(blocks: ContentBlock[]): ContentBlock[] {
 
 
 const DIMENSION =
-  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$|^(stakeholder|persona|audience|segment)s?$/i
+  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$|^(stakeholder|persona|audience|segment|symptom|discipline|capability|level|period|initiative|criterion|activity|offer|intent|lead magnet|source material|search need|data domain|evaluation dimension)s?$/i
 
 /**
  * Tries each column count and returns the first grid that passes every check.
@@ -611,30 +611,100 @@ const DIMENSION =
  * columns — "Strength | Limitation" read as a second header row — and was left
  * as sixteen loose lines, when four columns fits it exactly.
  */
-const HEADER_TERM =
-  /^(strengths?|weakness(es)?|risks?|limitations?|advantages?|disadvantages?|benefits?|drawbacks?|trade-?offs?|pros|cons|best (for|when|use)|use cases?|examples?|costs?|owners?|timelines?|outcomes?|metrics?|when to use)$/i
-
-function gridFor(cells: string[]): { headers: string[]; rows: string[][] } | null {
+function gridFor(cells: string[]): { headers: string[]; rows: string[][]; score: number } | null {
   if (!DIMENSION.test(cells[0])) return null
-  const avg = (xs: string[]) => xs.reduce((n, x) => n + x.length, 0) / xs.length
-  for (const k of [3, 2, 4, 5]) {
-    if (cells.length % k !== 0 || cells.length / k < 2) continue
-    const firstColumn = cells.filter((_, i) => i % k === 0)
-    const others = cells.filter((_, i) => i % k !== 0)
-    if (!firstColumn.every(isLabel) || avg(firstColumn) >= avg(others)) continue
+  const mean = (xs: number[]) => xs.reduce((n, x) => n + x, 0) / xs.length
+  const same = (a: string[], b: string[]) => a.length === b.length && a.every((c, n) => c === b[n])
+  const isQ = (c: string) => /\?["”’]?$/.test(c)
+  const isShort = (c: string) => c.length <= 30 && !c.includes(',')
+  const candidates: { headers: string[]; rows: string[][]; score: number }[] = []
+  for (const k of [2, 3, 4, 5]) {
+    if (cells.length % k !== 0) continue
     const headers = cells.slice(0, k)
+    // Column titles are short labels, never questions or sentences.
+    if (!headers.every((h) => h.length <= 48 && !/[.?]["”’]?$/.test(h))) continue
     const rows: string[][] = []
-    for (let r = k; r < cells.length; r += k) rows.push(cells.slice(r, r + k))
-    const splitHeader = rows[0].every((c) => c.length <= 24 && !/[?]$/.test(c))
-    const headerRepeated = rows.some((row) => row.some((c) => headers.includes(c)))
-    if (!splitHeader && !headerRepeated) return { headers, rows }
-    // A split header only means "try wider" when those cells are column
-    // titles. "Strength | Limitation" is; "Definitive guide | Topical
-    // authority" is data, and reading it wider scrambled two tables.
-    if (splitHeader && !rows[0].every((c) => HEADER_TERM.test(c))) return null
+    for (let r = k; r < cells.length; r += k) {
+      const row = cells.slice(r, r + k)
+      // A table that crossed a PDF page break repeats its header row; drop it.
+      if (!same(row, headers)) rows.push(row)
+    }
+    if (rows.length < 2) continue
+    if (!rows.every((row) => isLabel(row[0]))) continue
+    // Labels belong in the first column. A grid whose first column is all
+    // questions and whose last is all short labels has slid by one cell — a
+    // header went missing, so every row's label landed at the end of the row
+    // above. Uniform across rows, so the consistency score cannot see it.
+    const most = (f: (row: string[]) => boolean) => rows.filter(f).length >= rows.length * 0.75
+    const shifted = most((row) => isQ(row[0])) && most((row) => isShort(row[k - 1]) && !isQ(row[k - 1]))
+    if (shifted) continue
+    // Wide readings need more evidence: every correct table here with four or
+    // more columns has at least three rows; the wrong ones had two.
+    if (k >= 4 && rows.length < 3) continue
+    // A column that is half questions and half not means rows are alternating
+    // between two different kinds — the grid is interleaved, not a table.
+    // Checked as alternation, not proportion: a "Typical question" column may
+    // legitimately mix questions with search phrases; an interleaved grid
+    // flips question / not-question on nearly every row.
+    const alternates = Array.from({ length: k }, (_, c) => {
+      const q = rows.map((row) => isQ(row[c]))
+      const flips = q.slice(1).filter((v, n) => v !== q[n]).length
+      return rows.length >= 4 && flips >= (rows.length - 1) * 0.8
+    }).some(Boolean)
+    if (alternates) continue
+    // A real header row is written in one style. "Recommended Channel" (Title
+    // Case) beside "Long-term visibility" (sentence case) means a data cell has
+    // slid into the header, pairing every row with the wrong value.
+    const style = (h: string) => {
+      // Acronyms (KPIs, APIs, SEO) read the same in either style; skip them.
+      const words = h.split(/\s+/).filter((w) => /^[A-Za-z]{4,}/.test(w) && !/^[A-Z]{2,}/.test(w))
+      if (words.length < 2) return 'neutral'
+      return words.every((w) => /^[A-Z]/.test(w)) ? 'title' : words.slice(1).some((w) => /^[a-z]/.test(w)) ? 'sentence' : 'neutral'
+    }
+    const styles = new Set(headers.map(style).filter((x) => x !== 'neutral'))
+    if (styles.size > 1) continue
+    // A partial header repeat inside the data means the grid is misread.
+    if (rows.some((row) => row.some((c) => headers.includes(c)))) continue
+    // Consistency down each column: a wrong width mixes labels, questions and
+    // descriptions within a column; the right one keeps each column uniform.
+    // (Reading "Content Type | Primary Value | Definitive guides" at three
+    // columns, or a five-column table at three, both mix badly.)
+    let score = 0
+    for (let c = 0; c < k; c += 1) {
+      const col = rows.map((row) => row[c])
+      const lens = col.map((x) => x.length)
+      const m = mean(lens)
+      const cv = m === 0 ? 0 : Math.sqrt(mean(lens.map((x) => (x - m) ** 2))) / m
+      const q = col.filter(isQ).length / col.length
+      const sh = col.filter(isShort).length / col.length
+      score += cv + 2 * Math.min(q, 1 - q) + Math.min(sh, 1 - sh)
+    }
+    score /= k
+    candidates.push({ headers, rows, score })
   }
-  return null
+  if (candidates.length === 0) return null
+  // Two widths can score almost the same: a 2-column table read at 4 columns
+  // is just two real rows side by side, equally consistent. When the scores
+  // are that close, the narrower reading is the real table.
+  const best = candidates.reduce((a, b) => (b.score < a.score ? b : a))
+  // …but only when the wide reading's header continues with data rather than
+  // a column title. "Content Type | Primary Value | Definitive guides" is two
+  // rows side by side; "Lifecycle stage | Definition | Primary owner" is a
+  // genuine four-column header and must stay four columns.
+  const narrower = candidates
+    .filter((c) => {
+      const kn = c.headers.length
+      const kw = best.headers.length
+      return kn < kw && kw % kn === 0 && c.score <= best.score + 0.12 && !isColumnTitle(best.headers[kn])
+    })
+    .sort((a, b) => a.headers.length - b.headers.length)[0]
+  return narrower ?? best
 }
+
+const isColumnTitle = (h: string) =>
+  DIMENSION.test(h) ||
+  /^(primary|typical|key|main|best|suggested|useful|recommended|common|core|business|expected|likely|desired|example)\b/i.test(h) ||
+  /^(strengths?|weakness(es)?|risks?|limitations?|advantages?|disadvantages?|benefits?|drawbacks?|trade-?offs?|pros|cons|owners?|timelines?|outcomes?|metrics?|examples?|costs?|definitions?|deliverables?|objectives?|timing|purpose)$/i.test(h)
 
 const isQuestionCell = (b: ContentBlock) =>
   (b.type === 'h2' || b.type === 'h3') && /\?["”’]?$/.test(b.text.trim()) && b.text.length <= 140
@@ -672,12 +742,17 @@ function rebuildTables(blocks: ContentBlock[]): ContentBlock[] {
     while (trimmed > 0 && isHeadingBlock(run[trimmed - 1])) trimmed -= 1
     let grid: { headers: string[]; rows: string[][] } | null = null
     let used = 0
-    for (const end of trimmed < run.length ? [trimmed, run.length] : [run.length]) {
+    // Full run first; if it doesn't fit, allow one or two stray trailing lines
+    // (a note after the last row). Anything left out stays visible below.
+    const ends = [...new Set([trimmed, run.length, run.length - 1, run.length - 2])].filter((e) => e >= 6)
+    let bestScore = Infinity
+    for (const end of ends) {
       const part = run.slice(0, end)
       if (part.length < 6) continue
       const g = gridFor(part.map(cellText))
-      // A table built from converted headings must have at least two rows.
-      if (g && (!part.some(isHeadingBlock) || g.rows.length >= 2)) { grid = g; used = end; break }
+      // Prefer the full run: a trimmed reading must be clearly more consistent.
+      const score = g ? g.score + (end < run.length ? 0.15 : 0) : Infinity
+      if (g && score < bestScore) { bestScore = score; grid = g; used = end }
     }
     if (grid) {
       const { headers, rows } = grid
