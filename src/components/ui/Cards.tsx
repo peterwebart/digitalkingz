@@ -123,13 +123,27 @@ export function ArticleCard({
             // Anchored to the top, where each infographic carries its title,
             // so the thumbnail shows the recognisable part rather than a slice
             // from the middle of a tall portrait image.
-            <Image
-              src={mediaSrc(thumb.url as string)}
-              alt={thumb.alt ?? ''}
-              fill
-              sizes="(max-width: 768px) 100vw, 33vw"
-              className="object-cover object-top transition-transform duration-700 group-hover:scale-[1.03]"
-            />
+            // The infographics are portrait (about 2:3) and the card is landscape,
+            // so object-cover cropped away everything below the title. The full
+            // image is now contained, over a blurred copy of itself so the box
+            // is filled rather than letterboxed in empty space.
+            <>
+              <Image
+                src={mediaSrc(thumb.url as string)}
+                alt=""
+                aria-hidden="true"
+                fill
+                sizes="(max-width: 768px) 100vw, 33vw"
+                className="scale-125 object-cover opacity-35 blur-2xl"
+              />
+              <Image
+                src={mediaSrc(thumb.url as string)}
+                alt={thumb.alt ?? ''}
+                fill
+                sizes="(max-width: 768px) 100vw, 33vw"
+                className="object-contain p-3 transition-transform duration-700 group-hover:scale-[1.02]"
+              />
+            </>
           ) : (
             <div
               aria-hidden="true"
