@@ -602,7 +602,7 @@ function splitGluedHeaderCells(blocks: ContentBlock[]): ContentBlock[] {
 
 
 const DIMENSION =
-  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$/i
+  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$|^(stakeholder|persona|audience|segment)s?$/i
 
 /**
  * Tries each column count and returns the first grid that passes every check.
@@ -636,24 +636,53 @@ function gridFor(cells: string[]): { headers: string[]; rows: string[][] } | nul
   return null
 }
 
+const isQuestionCell = (b: ContentBlock) =>
+  (b.type === 'h2' || b.type === 'h3') && /\?["”’]?$/.test(b.text.trim()) && b.text.length <= 140
+
 function rebuildTables(blocks: ContentBlock[]): ContentBlock[] {
   const out: ContentBlock[] = []
   let i = 0
   while (i < blocks.length) {
+    // A question cell the converter promoted to a heading still belongs to
+    // the run when the line before it is a cell: "Firmographics" then "What
+    // industry, company size… are the best fit?". Headings only become cells
+    // if the run then passes every table check below; otherwise they are left
+    // exactly as they were. A real section heading is followed by its answer,
+    // a full sentence, so it never forms a grid with its neighbours.
     let j = i
-    while (j < blocks.length && isCell(blocks[j])) j += 1
-    const run = blocks.slice(i, j) as { type: 'p'; text: string }[]
+    // …and so does a cell holding several questions, which the export made a
+    // small list: "Risk factors" then "Which characteristics lead to poor-fit
+    // customers…? / What are…?".
+    while (j < blocks.length && (isCell(blocks[j]) ||
+      (j > i && isCell(blocks[j - 1]) && (isQuestionCell(blocks[j]) || isQuestionList(blocks[j]))))) j += 1
+    const run = blocks.slice(i, j)
     // Only build when the first header cell names a dimension ("Factor",
     // "Area", "Signal"). That is the reliable tell of a comparison table read
     // column by column. When it names a subject instead — "Traditional SEO" —
     // the column count cannot be recovered reliably, and a sample showed those
     // coming out scrambled, pairing facts with the wrong column. A table that
     // is left flat reads as plain text; one that is built wrong misinforms.
-    const grid = run.length >= 6 ? gridFor(run.map((c) => c.text.trim())) : null
+    const cellText = (b: ContentBlock) =>
+      b.type === 'ul' || b.type === 'ol' ? b.items.join(' ') : 'text' in b ? b.text.trim() : ''
+    // Try the run without trailing headings first: a heading after the last
+    // row is usually the next section's, and absorbing it scrambled one table
+    // and swallowed a real heading into another.
+    const isHeadingBlock = (b: ContentBlock) => b.type === 'h2' || b.type === 'h3'
+    let trimmed = run.length
+    while (trimmed > 0 && isHeadingBlock(run[trimmed - 1])) trimmed -= 1
+    let grid: { headers: string[]; rows: string[][] } | null = null
+    let used = 0
+    for (const end of trimmed < run.length ? [trimmed, run.length] : [run.length]) {
+      const part = run.slice(0, end)
+      if (part.length < 6) continue
+      const g = gridFor(part.map(cellText))
+      // A table built from converted headings must have at least two rows.
+      if (g && (!part.some(isHeadingBlock) || g.rows.length >= 2)) { grid = g; used = end; break }
+    }
     if (grid) {
       const { headers, rows } = grid
       out.push({ type: 'table', headers, rows })
-      i = j
+      i += used
     } else {
       out.push(blocks[i])
       i += 1
