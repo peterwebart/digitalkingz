@@ -80,7 +80,9 @@ export function normaliseBlocks(blocks: ContentBlock[], title: string): ContentB
       // second half of "Does the business match the user's need?", split by
       // the export and promoted to an H2 only because it ended in "?". Demote
       // it so the paragraph merge below rejoins the halves.
-      const clean = text.replace(/^Question:\s*/i, '')
+      // Hand-written articles never reach this pass (see AUTHORED_ARTICLES in
+      // the seed), so brief labels can be removed from every heading here.
+      const clean = stripHeadingLabel(text)
       block = startsLower(clean) ? { type: 'p', text: clean } : { ...block, text: clean }
     }
     if (block.type === 'ul' || block.type === 'ol') {
@@ -116,8 +118,121 @@ export function normaliseBlocks(blocks: ContentBlock[], title: string): ContentB
     .filter((b) => !(b.type === 'p' && SCAFFOLD_BLOCK.test(b.text.trim())))
     .flatMap(splitGluedHeadings)
     .flatMap(colonLists)
-  return absorbFusedFirstRow(rebuildTables(splitGluedHeaderCells(restoreLists(structured))))
+  return mergeQuestionRuns(
+    absorbFusedFirstRow(rebuildTables(splitGluedHeaderCells(trimListTails(restoreLists(structured))))),
+  )
 }
+
+// --- Runs of questions ------------------------------------------------------
+//
+// A procurement checklist came out as two lists, two stray paragraphs and one
+// question promoted to an H2, with two questions split mid-line ("…backfills,
+// and data" / "freshness?"). Three repairs, each confined to a run of
+// questions so ordinary prose and real question headings are untouched:
+//   - a paragraph with no sentence ending, followed by a list whose first item
+//     starts lowercase, is that item's first half
+//   - a single-question paragraph beside a list of questions joins the list
+//   - a question heading between two lists of questions is one of them; a
+//     real question heading is followed by an answer, not more questions
+
+const isQuestion2 = (t: string) => /\?["”’]?$/.test(t.trim())
+const isQuestionList = (b: ContentBlock | undefined) =>
+  !!b && (b.type === 'ul' || b.type === 'ol') && b.items.length > 0 && b.items.every(isQuestion2)
+
+function mergeQuestionRuns(blocks: ContentBlock[]): ContentBlock[] {
+  const joined: ContentBlock[] = []
+  for (let i = 0; i < blocks.length; i += 1) {
+    const b = blocks[i]
+    const next = blocks[i + 1]
+    if (b.type === 'p' && !/[.;:!?]["”’]?$/.test(b.text.trim()) && next &&
+        (next.type === 'ul' || next.type === 'ol') && startsLower(next.items[0])) {
+      blocks[i + 1] = { ...next, items: [`${b.text.trim()} ${next.items[0]}`, ...next.items.slice(1)] }
+      continue
+    }
+    joined.push(b)
+  }
+  const out: ContentBlock[] = []
+  for (let i = 0; i < joined.length; i += 1) {
+    const b = joined[i]
+    const prev = out[out.length - 1]
+    const next = joined[i + 1]
+    if (isQuestionList(prev) && (prev.type === 'ul' || prev.type === 'ol')) {
+      const singleQuestion = b.type === 'p' && isQuestion2(b.text) && !/[.!]\s/.test(b.text) && b.text.length <= 220
+      const strayHeading = (b.type === 'h2' || b.type === 'h3') && isQuestion2(b.text) &&
+        (isQuestionList(next) || (next?.type === 'p' && isQuestion2(next.text)))
+      if (singleQuestion || strayHeading) {
+        out[out.length - 1] = { ...prev, items: [...prev.items, (b as { text: string }).text] }
+        continue
+      }
+      if ((b.type === 'ul' || b.type === 'ol') && isQuestionList(b)) {
+        out[out.length - 1] = { ...prev, items: [...prev.items, ...b.items] }
+        continue
+      }
+    }
+    out.push(b)
+  }
+  return out
+}
+
+/**
+ * The export ran a list's closing paragraph into its last item: "7. Evaluate
+ * … total cost of ownership. A reliable marketing measurement program does not
+ * promise…". When the last item has at least two more sentences than a typical
+ * item in its own list, the extra sentences are prose and move out beneath it.
+ * Lists whose items are all several sentences long are left alone.
+ */
+function trimListTails(blocks: ContentBlock[]): ContentBlock[] {
+  const sentences = (t: string) => t.split(/(?<=[.!?])\s+(?=[A-Z])/)
+  const out: ContentBlock[] = []
+  for (const b of blocks) {
+    if ((b.type !== 'ol' && b.type !== 'ul') || b.items.length < 3) { out.push(b); continue }
+    const counts = b.items.slice(0, -1).map((t) => sentences(t).length).sort((x, y) => x - y)
+    const keep = Math.max(1, counts[Math.floor(counts.length / 2)])
+    const last = sentences(b.items[b.items.length - 1])
+    if (last.length < keep + 2) { out.push(b); continue }
+    out.push({ ...b, items: [...b.items.slice(0, -1), last.slice(0, keep).join(' ')] })
+    out.push({ type: 'p', text: last.slice(keep).join(' ') })
+  }
+  return out
+}
+
+// --- The article's own FAQ section -------------------------------------------
+//
+// Articles carry an FAQ section in the body ("FAQ", then question headings with
+// answers). The page also renders the faqs field as an accordion with FAQPage
+// schema, and the converter filled that field with the first question headings
+// it found anywhere — including "Introduction: What business decisions…". The
+// result was the same answers twice and an intro posing as an FAQ. The body's
+// FAQ section becomes the faqs field and leaves the body, so each answer
+// appears once, in the component built for it.
+
+const FAQ_MARKER = /^(faqs?|frequently asked questions)$/i
+
+export function extractFaqSection(blocks: ContentBlock[]): {
+  body: ContentBlock[]
+  faqs: { question: string; answer: string }[]
+} {
+  const start = blocks.findIndex((b) => (b.type === 'p' || b.type === 'h2' || b.type === 'h3') && FAQ_MARKER.test(b.text.trim()))
+  if (start === -1) return { body: blocks, faqs: [] }
+  const faqs: { question: string; answer: string }[] = []
+  let i = start + 1
+  while (i < blocks.length) {
+    const q = blocks[i]
+    if ((q.type !== 'h2' && q.type !== 'h3') || !isQuestion2(q.text)) break
+    const answer: string[] = []
+    let j = i + 1
+    while (j < blocks.length && blocks[j].type === 'p') { answer.push((blocks[j] as { text: string }).text); j += 1 }
+    if (answer.length === 0) break
+    faqs.push({ question: q.text, answer: answer.join(' ') })
+    i = j
+  }
+  if (faqs.length < 3) return { body: blocks, faqs: [] }
+  return { body: [...blocks.slice(0, start), ...blocks.slice(i)], faqs }
+}
+
+/** Removes labels the brief put in front of headings ("Introduction: …"). */
+export const stripHeadingLabel = (t: string) =>
+  t.replace(/^(introduction|summary|conclusion|question|overview)\s*:\s+(?=\S)/i, '')
 
 /**
  * "Maturity stage Reactive reporting / Typical behavior Manual exports… /
@@ -485,21 +600,41 @@ function splitGluedHeaderCells(blocks: ContentBlock[]): ContentBlock[] {
   return out
 }
 
-function chooseColumns(cells: string[]): number | null {
+
+const DIMENSION =
+  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$/i
+
+/**
+ * Tries each column count and returns the first grid that passes every check.
+ * A width rejected by the guards falls through to the next: the attribution
+ * table (Method | Best question answered | Strength | Limitation) failed at two
+ * columns — "Strength | Limitation" read as a second header row — and was left
+ * as sixteen loose lines, when four columns fits it exactly.
+ */
+const HEADER_TERM =
+  /^(strengths?|weakness(es)?|risks?|limitations?|advantages?|disadvantages?|benefits?|drawbacks?|trade-?offs?|pros|cons|best (for|when|use)|use cases?|examples?|costs?|owners?|timelines?|outcomes?|metrics?|when to use)$/i
+
+function gridFor(cells: string[]): { headers: string[]; rows: string[][] } | null {
+  if (!DIMENSION.test(cells[0])) return null
+  const avg = (xs: string[]) => xs.reduce((n, x) => n + x.length, 0) / xs.length
   for (const k of [3, 2, 4, 5]) {
     if (cells.length % k !== 0 || cells.length / k < 2) continue
     const firstColumn = cells.filter((_, i) => i % k === 0)
     const others = cells.filter((_, i) => i % k !== 0)
-    const labelled = firstColumn.every(isLabel)
-    // The first column should be noticeably terser than the rest.
-    const avg = (xs: string[]) => xs.reduce((n, x) => n + x.length, 0) / xs.length
-    if (labelled && avg(firstColumn) < avg(others)) return k
+    if (!firstColumn.every(isLabel) || avg(firstColumn) >= avg(others)) continue
+    const headers = cells.slice(0, k)
+    const rows: string[][] = []
+    for (let r = k; r < cells.length; r += k) rows.push(cells.slice(r, r + k))
+    const splitHeader = rows[0].every((c) => c.length <= 24 && !/[?]$/.test(c))
+    const headerRepeated = rows.some((row) => row.some((c) => headers.includes(c)))
+    if (!splitHeader && !headerRepeated) return { headers, rows }
+    // A split header only means "try wider" when those cells are column
+    // titles. "Strength | Limitation" is; "Definitive guide | Topical
+    // authority" is data, and reading it wider scrambled two tables.
+    if (splitHeader && !rows[0].every((c) => HEADER_TERM.test(c))) return null
   }
   return null
 }
-
-const DIMENSION =
-  /^(?:[A-Za-z]+\s)?(factor|area|signal|dimension|criterion|criteria|aspect|attribute|feature|metric|category|type|element|component|stage|step|phase|channel|model|approach|method|question|topic|role|priority|use case|goal|objective|risk|option|tool|platform|asset|layer)s?$/i
 
 function rebuildTables(blocks: ContentBlock[]): ContentBlock[] {
   const out: ContentBlock[] = []
@@ -508,24 +643,15 @@ function rebuildTables(blocks: ContentBlock[]): ContentBlock[] {
     let j = i
     while (j < blocks.length && isCell(blocks[j])) j += 1
     const run = blocks.slice(i, j) as { type: 'p'; text: string }[]
-    const k = run.length >= 6 ? chooseColumns(run.map((c) => c.text)) : null
     // Only build when the first header cell names a dimension ("Factor",
     // "Area", "Signal"). That is the reliable tell of a comparison table read
     // column by column. When it names a subject instead — "Traditional SEO" —
     // the column count cannot be recovered reliably, and a sample showed those
     // coming out scrambled, pairing facts with the wrong column. A table that
     // is left flat reads as plain text; one that is built wrong misinforms.
-    const cells = run.map((c) => c.text.trim())
-    const headers = k ? cells.slice(0, k) : []
-    const rows: string[][] = []
-    if (k) for (let r = k; r < cells.length; r += k) rows.push(cells.slice(r, r + k))
-    // Reject two failure modes seen in review, rather than build them wrong:
-    //   - a split header: the first "row" is more column titles ("Strength |
-    //     Risk" under "Model | Best when") because the real table is wider
-    //   - a header cell repeated inside the data, meaning the grid is misread
-    const splitHeader = rows[0]?.every((c) => c.length <= 24 && !/[?]$/.test(c))
-    const headerRepeated = rows.some((r) => r.some((c) => headers.includes(c)))
-    if (k && DIMENSION.test(cells[0]) && !splitHeader && !headerRepeated) {
+    const grid = run.length >= 6 ? gridFor(run.map((c) => c.text.trim())) : null
+    if (grid) {
+      const { headers, rows } = grid
       out.push({ type: 'table', headers, rows })
       i = j
     } else {

@@ -10,7 +10,24 @@
  * Requires DATABASE_URI and PAYLOAD_SECRET.
  */
 import 'dotenv/config'
-import { normaliseBlocks } from './normalise'
+import { extractFaqSection, normaliseBlocks, stripHeadingLabel } from './normalise'
+
+/**
+ * Articles written directly as structured content rather than converted from a
+ * PDF export: the eight launch articles, and the CRO guide, restructured by
+ * hand. Add a slug here whenever an article is rewritten by hand.
+ */
+const AUTHORED_ARTICLES = new Set([
+  'how-much-does-a-business-website-cost',
+  'local-seo-checklist',
+  'how-to-get-cited-by-chatgpt-and-ai-search',
+  'ai-lead-qualification',
+  'signs-your-website-is-costing-you-revenue',
+  'google-ads-vs-seo',
+  'core-web-vitals-and-revenue',
+  'lead-to-revenue-system',
+  'complete-conversion-rate-optimization-guide',
+])
 import { getPayload } from 'payload'
 import type { Payload } from 'payload'
 import config from '@payload-config'
@@ -368,7 +385,21 @@ async function seed() {
     const targets = linkTargets.filter((t) => t.slug !== a.slug)
     // Repair PDF-export damage — wrapped sentences, split lists, running page
     // headers — before linking, so links are placed in the corrected text.
-    const cleaned = normaliseBlocks(a.body, a.title)
+    // Hand-written articles skip the repair pass entirely. It exists to undo
+    // PDF-export damage; on text that was authored clean it has nothing to fix
+    // and can only rewrite deliberate editorial choices.
+    const authored = AUTHORED_ARTICLES.has(a.slug)
+    const section = authored
+      ? { body: a.body, faqs: [] as { question: string; answer: string }[] }
+      : extractFaqSection(normaliseBlocks(a.body, a.title))
+    const cleaned = section.body
+    // The body's own FAQ section wins; otherwise the stored FAQs, with any
+    // brief labels ("Introduction: …") removed from the questions.
+    const faqs = authored
+      ? a.faqs
+      : section.faqs.length > 0
+        ? section.faqs
+        : a.faqs.map((f) => ({ ...f, question: stripHeadingLabel(f.question) }))
     const linked = autolink(cleaned, targets, 8)
     await upsert(payload, 'posts', a.slug, {
       slug: a.slug,
@@ -380,7 +411,7 @@ async function seed() {
       featured: i < 3,
       heroImage: a.heroImage ? mediaIds.get(a.heroImage) : undefined,
       body: blocksToLexical(linked),
-      faqs: a.faqs,
+      faqs,
       relatedServices: a.relatedServices
         .map((slug) => serviceIds.get(slug))
         .filter((v): v is number | string => v !== undefined),
