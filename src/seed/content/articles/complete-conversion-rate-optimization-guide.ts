@@ -1597,7 +1597,7 @@ const article: ArticleSeed = {
     },
     {
       type: 'p',
-      text: '[Google’s guidance](https://developers.google.com/search/docs/fundamentals/using-gen-ai-content) is clear that AI-assisted content must remain helpful, accurate, original, and people-first. Automation primarily intended to manipulate rankings [may violate spam policies](https://developers.google.com/search/blog/2023/02/google-search-and-ai-content).',
+      text: '[Google’s guidance on using generative AI content](https://developers.google.com/search/docs/fundamentals/using-gen-ai-content) is clear that AI-assisted content must remain helpful, accurate, original, and people-first. Automation primarily intended to manipulate rankings may violate Google’s spam policies, as [Google’s statement on AI-generated content](https://developers.google.com/search/blog/2023/02/google-search-and-ai-content) makes clear.',
     },
 
     // --- Summary ------------------------------------------------------------
